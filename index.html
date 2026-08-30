@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Script Snake — prototype</title>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Zen+Old+Mincho:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+Devanagari:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Script Snake</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+Devanagari:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --indigo:#1C2541; --indigo-2:#243055; --grid:#2A3660;
     --washi:#F1EDE3; --mist:#8A93AD;
     --jade:#9AD1B2; --jade-bright:#D7F0E0;
-    --shu:#E63B2E; --shu-soft:#F4A79F;
+    --shu:#E63B2E; --shu-soft:#F4A79F; --gold:#E8C46A;
     --glyph:'Zen Kaku Gothic New','Noto Sans SC','Noto Sans Devanagari','Hiragino Sans','Noto Sans JP','Segoe UI',sans-serif;
     --disp:'Zen Old Mincho','Hiragino Mincho ProN',serif;
     --mono:'IBM Plex Mono',ui-monospace,monospace;
@@ -32,14 +32,18 @@
   .pills{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
   .pill{background:transparent;border:1px solid var(--grid);border-radius:20px;color:var(--mist);font:500 12px var(--mono);padding:5px 12px;cursor:pointer}
   .pill.on{background:var(--indigo);color:var(--washi);border-color:var(--indigo)}
+  .pill.mode.on{border-color:var(--gold);color:var(--gold)}
+  .modeBlurb{min-height:14px;text-align:center;font-size:11px;color:var(--mist)}
   .result{min-height:16px;text-align:center;font-size:12px;color:var(--mist)}
   .primary{background:var(--jade);color:var(--indigo);border:0;border-radius:10px;padding:13px;font:500 15px var(--mono);cursor:pointer}
   .ghost{background:transparent;border:1px solid var(--grid);border-radius:10px;color:var(--jade);padding:10px;font:500 13px var(--mono);cursor:pointer}
   .ghost.sm{border:0;padding:4px 10px;color:var(--mist);font-size:12px}
   .hint{margin:2px 0 0;text-align:center;font-size:11px;color:var(--mist);line-height:1.5}
   .row{display:flex;align-items:center;justify-content:space-between}
-  .score{font-size:13px;color:var(--mist)}
+  .score{font-size:13px;color:var(--mist);text-align:right}
   .score b{font:700 20px var(--disp);color:var(--washi)}
+  .mult{display:block;font-size:11px;color:var(--mist)}
+  .mult.hot{color:var(--gold)}
   .under{display:flex;justify-content:center;gap:14px}
   .setgrp{display:flex;flex-direction:column;gap:8px;margin-top:14px;border-top:0.5px solid var(--grid);padding-top:12px;font-size:12px;color:var(--mist)}
   .setgrp label{display:flex;align-items:center;gap:8px;justify-content:space-between}
@@ -52,7 +56,7 @@
   .seal small{position:absolute;bottom:2px;font:400 8px var(--mono);letter-spacing:.1em;color:var(--shu-soft)}
   .seal.hidden-cue{font-size:24px}
   canvas{width:100%;max-width:520px;aspect-ratio:1;background:var(--indigo);border:1px solid var(--grid);border-radius:8px;touch-action:none;display:block;box-shadow:0 18px 40px -20px rgba(0,0,0,.7)}
-  .pad{display:none;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,52px);gap:6px}
+  .pad{display:none;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,52px);gap:6px;margin:0 auto}
   .pad button{background:var(--indigo-2);border:1px solid var(--grid);border-radius:6px;color:var(--washi);font-size:20px}
   .pad button:nth-child(1){grid-column:2}
   .pad button:nth-child(2){grid-column:1;grid-row:2}
@@ -64,7 +68,7 @@
   .learn{position:fixed;inset:0;z-index:20;display:none;background:rgba(28,37,65,.92);backdrop-filter:blur(3px);overflow:auto;padding:18px 12px 40px}
   .learn.show{display:block}
   .learn .inner{max-width:520px;margin:0 auto}
-  .learn .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .learn .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
   .learn h2{margin:0;font:700 22px var(--disp)}
   .learn .sub{font-size:11px;color:var(--mist);margin-top:4px}
   .chart{display:grid;grid-template-columns:repeat(var(--cols,5),1fr);gap:8px}
@@ -76,6 +80,16 @@
   .tile.weak em{position:absolute;top:-8px;right:-6px;background:var(--shu);color:#fff;font:500 10px var(--mono);font-style:normal;border-radius:10px;padding:1px 6px}
   .tile.mastered{border-color:var(--jade)}
   .legend{display:flex;gap:14px;font-size:11px;color:var(--mist);margin:12px 0 0}
+  .over-card{width:min(92vw,340px);display:flex;flex-direction:column;gap:10px;background:var(--indigo-2);border:1px solid var(--grid);border-radius:14px;padding:20px 16px;text-align:center}
+  .over-card h2{margin:0;font:700 22px var(--disp)}
+  .overScore{font:700 44px/1 var(--disp)}
+  .overRecord{min-height:16px;font-size:12px;color:var(--gold)}
+  .overDetail{font-size:12px;color:var(--mist)}
+  .missRow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:4px}
+  .missRow[hidden]{display:none}
+  .missLabel{font-size:11px;color:var(--mist)}
+  .missChip{background:var(--washi);color:#1A2138;border:1px solid var(--shu);border-radius:6px;padding:4px 8px;cursor:pointer;font:500 14px var(--glyph)}
+  .missChip i{font:400 10px var(--mono);color:#4a5170;font-style:normal;margin-left:3px}
 </style>
 </head>
 <body>
@@ -84,16 +98,21 @@
   <h1>Script Snake<span id="snakeWord">へび</span></h1>
   <div class="chips" id="langGrid"></div>
   <div class="pills" id="setRow"></div>
+  <div class="pills" id="modeRow"></div>
+  <div class="modeBlurb" id="modeBlurb"></div>
   <div class="result" id="resultLine"></div>
   <button class="primary" id="playBtn">Play</button>
   <button class="ghost" id="menuLearnBtn">Learn the characters</button>
-  <p class="hint">swipe or arrows to steer · eat the character you hear · wrong bites cost a segment</p>
+  <p class="hint">swipe or arrows to steer · eat the character you hear · wrong bites cost a segment<br>answer fast for bonus points · <kbd>space</kbd> replays the sound</p>
 </div></div>
 
-<div class="scr" id="playScr">
+<div class="scr" id="playScr" hidden>
   <div class="row">
     <div class="seal" id="seal"><span id="cueText">—</span><small>▶</small></div>
-    <div class="score"><b id="score">0</b><span> · streak <b id="streak">0</b></span></div>
+    <div class="score">
+      <b id="score">0</b><span> · streak <b id="streak">0</b></span>
+      <span class="mult" id="mult"></span>
+    </div>
   </div>
   <canvas id="c" aria-label="Game board"></canvas>
   <div class="under">
@@ -101,304 +120,36 @@
     <button class="ghost sm" id="quitBtn">menu</button>
   </div>
   <div class="pad" aria-label="Direction pad">
-    <button data-d="up">↑</button><button data-d="left">←</button><button data-d="down">↓</button><button data-d="right">→</button>
+    <button data-dir="up" aria-label="Up">↑</button><button data-dir="left" aria-label="Left">←</button><button data-dir="down" aria-label="Down">↓</button><button data-dir="right" aria-label="Right">→</button>
   </div>
 </div>
+
+<div class="ov" id="overScr" hidden><div class="over-card">
+  <h2>run over</h2>
+  <div class="overScore" id="overScore">0</div>
+  <div class="overRecord" id="overRecord"></div>
+  <div class="overDetail" id="overDetail"></div>
+  <div class="missRow" id="overMissed" hidden></div>
+  <button class="primary" id="againBtn">Again</button>
+  <button class="ghost" id="overMenuBtn">menu</button>
+</div></div>
 
 <div class="learn" id="learn" role="dialog" aria-label="Character chart">
   <div class="inner">
     <div class="top">
       <div><h2 id="learnTitle">chart</h2><div class="sub">tap to hear · game paused</div></div>
-      <div style="display:flex;gap:8px"><button class="btn" id="sortBtn">weakest first</button><button class="btn" id="resetBtn">reset progress</button><button class="btn" id="learnClose">back to game</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="sortBtn">weakest first</button><button class="btn" id="resetBtn">reset progress</button><button class="btn" id="learnClose">back</button></div>
     </div>
     <div class="chart" id="chart"></div>
     <div class="legend">red border = missed · green = solid</div>
     <div class="setgrp">
       <label>voice <select id="voiceSel" aria-label="Voice"></select></label>
       <label><input type="checkbox" id="showSnd"> show the sound during play</label>
+      <label><input type="checkbox" id="reduceMotion"> reduce motion (no shake or particles)</label>
     </div>
   </div>
 </div>
 
-<script>
-// ---------- data ---------- (glyph followed by its sound, space-separated)
-const T=str=>Object.fromEntries(str.split(' ').map(x=>[x[0],x.slice(1)]));
-const HIRA = T('あa いi うu えe おo かka きki くku けke こko さsa しshi すsu せse そso たta ちchi つtsu てte とto なna にni ぬnu ねne のno はha ひhi ふfu へhe ほho まma みmi むmu めme もmo やya ゆyu よyo らra りri るru れre ろro わwa をwo んn');
-const KATA = T('アa イi ウu エe オo カka キki クku ケke コko サsa シshi スsu セse ソso タta チchi ツtsu テte トto ナna ニni ヌnu ネne ノno ハha ヒhi フfu ヘhe ホho マma ミmi ムmu メme モmo ヤya ユyu ヨyo ラra リri ルru レre ロro ワwa ヲwo ンn');
-const HANZI = T('人rén 入rù 大dà 天tiān 太tài 夫fū 小xiǎo 中zhōng 国guó 我wǒ 你nǐ 他tā 好hǎo 是shì 不bù 一yī 二èr 三sān 四sì 五wǔ 六liù 七qī 八bā 九jiǔ 十shí 上shàng 下xià 日rì 曰yuē 目mù 月yuè 水shuǐ 火huǒ 山shān 口kǒu 手shǒu 毛máo 心xīn 木mù 本běn 土tǔ 士shì 女nǚ 子zǐ 马mǎ 车chē 门mén 白bái 百bǎi 王wáng 玉yù 田tián 由yóu 甲jiǎ 力lì 刀dāo 千qiān 干gān 于yú 牛niú 午wǔ 今jīn 令lìng 未wèi 末mò 己jǐ 已yǐ');
-const CYR = T('Аa Бb Вv Гg Дd Еye Ёyo Жzh Зz Иi Йy Кk Лl Мm Нn Оo Пp Рr Сs Тt Уu Фf Хkh Цts Чch Шsh Щshch Ыɨ Эe Юyu Яya');
-const DEV_V = T('अa आā इi ईī उu ऊū एe ऐai ओo औau');
-const DEV_C = T('कka खkha गga घgha ङṅa चca छcha जja झjha ञña टṭa ठṭha डḍa ढḍha णṇa तta थtha दda धdha नna पpa फpha बba भbha मma यya रra लla वva शśa षṣa सsa हha');
-const ALL = {...HIRA,...KATA,...HANZI,...CYR,...DEV_V,...DEV_C};
-
-const LANGS = {
-  ja:{name:'Japanese', word:'へび',  tts:'ja', sets:{hiragana:HIRA, katakana:KATA}},
-  zh:{name:'Chinese',  word:'蛇',    tts:'zh', sets:{'hanzi (HSK 1)':HANZI}},
-  ru:{name:'Russian',  word:'змея',  tts:'ru', sets:{cyrillic:CYR}},
-  hi:{name:'Hindi',    word:'साँप',  tts:'hi', sets:{vowels:DEV_V, consonants:DEV_C}},
-};
-// visually confusable groups — the distractor pool (characters are unique across scripts, so one list)
-const CONFUSE = [
-  'さきち','はほま','ぬめ','わねれ','るろ','いり','こに','あお','つう','しも','たな','けは','ふら','くへ','そろ','ゆや','のめあ','よま','んえ','ひへ',
-  'シツ','ソン','クケタ','コユ','チテ','ナメ','ワウフ','アマ','ヌス','ルレ','ミニ','ハヘ','オホ','サセ','ヨヲ','ラヲ','イト','エユ','リソ',
-  '人入','大天太夫','己已','土士','日曰目','未末','王玉','千干于','木本','力刀','今令','田由甲','白百','手毛','午牛','二三','小水',
-  'ВБ','ИЙ','ШЩ','ПЛ','ЕЁ','ЦЧ','ОФ','ДЛ','ЗЭ','ХЖ','КН','ГТ','НП','РВ','УЧ','АЛД','ЫИ',
-  'घध','भम','बव','टठ','डढ','पफ','गण','तन','इई','उऊ','एऐ','ओऔ','यथ','शष','छद','ङड','खरव','ञज','अआ','ओओ'
-];
-const confuseOf = ch => { const s=new Set(); for(const g of CONFUSE) if(g.includes(ch)) for(const c of g) if(c!==ch) s.add(c); return [...s]; };
-
-// ---------- state ----------
-const N=16, W=640, S=W/N;
-// persisted in this browser: per-character stats, language/set, voice choice, cue mode, best score
-const KEY='script-snake-v1';
-let saved={}; try{ saved=JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){}
-const stats=saved.stats||{}; const st = ch => stats[ch] ||= {err:0, ok:0};
-let best=saved.best||0;
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify({stats,best,lang,setName,chosen,showRomaji})); }catch(e){} }
-let lang=saved.lang||'ja', setName=saved.setName||'hiragana', table={};
-let snake=[], prev=[], dir={x:1,y:0}, nextDir=dir, items=[], target=null, score=0, streak=0, tick=230, timer=null, paused=false, over=false;
-let showRomaji=saved.showRomaji!==false, lastTarget=null, lastStep=0, shake=0, headPop=0;
-const fx=[];
-
-const $=id=>document.getElementById(id);
-const cv=$('c'), ctx=cv.getContext('2d');
-const DPR=Math.min(2,window.devicePixelRatio||1);
-cv.width=W*DPR; cv.height=W*DPR; ctx.scale(DPR,DPR);
-const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const C={bg:'#1C2541',ind2:'#243055',grid:'#2A3660',washi:'#F1EDE3',mist:'#8A93AD',jade:'#9AD1B2',jb:'#D7F0E0',jd:'#4F8C6E',shu:'#E63B2E',ink:'#1A2138'};
-const KF=()=>css('--glyph')||'sans-serif', DF=()=>css('--disp')||'serif', MF=()=>css('--mono')||'monospace';
-
-function buildTable(){ const sets=LANGS[lang].sets; table = setName==='both' ? Object.assign({},...Object.values(sets)) : {...sets[setName]}; }
-const NATIVE={ja:['日本語','Japanese'],zh:['中文','Chinese'],ru:['Русский','Russian'],hi:['हिन्दी','Hindi']};
-function showMenu(on){ $('menuScr').hidden=!on; }
-function buildMenu(){
-  $('langGrid').innerHTML=Object.keys(LANGS).map(k=>`<button class="chip ${k===lang?'on':''}" data-l="${k}"><b>${NATIVE[k][0]}</b><span>${NATIVE[k][1]}</span></button>`).join('');
-  const names=Object.keys(LANGS[lang].sets); if(names.length>1) names.push('both');
-  if(!names.includes(setName)) setName=names[0];
-  $('setRow').innerHTML=names.map(n=>`<button class="pill ${n===setName?'on':''}" data-s="${n}">${n}</button>`).join('');
-  $('snakeWord').textContent=LANGS[lang].word;
-  $('langGrid').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{ lang=b.dataset.l; setName=Object.keys(LANGS[lang].sets)[0]; save(); pickVoice(); buildMenu(); });
-  $('setRow').querySelectorAll('.pill').forEach(b=>b.onclick=()=>{ setName=b.dataset.s; save(); buildMenu(); });
-  if(best) $('resultLine').textContent=`best ${best}`;
-}
-function toMenu(msg){ showMenu(true); buildMenu(); if(msg) $('resultLine').textContent=`${msg} · best ${best}`; }
-
-// ---------- audio ----------
-let voice=null; const chosen=saved.chosen||{};                       // remembered voice per language
-const PREF=/google|nanami|keita|kyoko|otoya|xiaoxiao|yunxi|tingting|milena|irina|swara|hemant|neural|natural|premium|enhanced/i;
-function pickVoice(){ const p=LANGS[lang].tts, all=speechSynthesis.getVoices().filter(v=>v.lang.toLowerCase().startsWith(p));
-  all.sort((a,b)=>(PREF.test(b.name)-PREF.test(a.name))||(b.localService-a.localService));
-  voice = all.find(v=>v.name===chosen[lang]) || all[0] || null;
-  const sel=$('voiceSel'); sel.innerHTML = all.length ? all.map(v=>`<option ${v===voice?'selected':''}>${v.name}</option>`).join('') : `<option>no ${LANGS[lang].name} voice here — text cue only</option>`;
-  sel.disabled=!all.length; }
-$('voiceSel').addEventListener('change',e=>{ chosen[lang]=e.target.value; save(); pickVoice(); speak(target); e.target.blur(); });
-if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
-function speak(ch){ const s=$('seal'); s.classList.remove('pulse'); void s.offsetWidth; s.classList.add('pulse');
-  if(!voice||!ch) return; speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(/ja|zh/.test(voice.lang)?ch+'。':ch); u.voice=voice; u.lang=voice.lang; u.rate=.9; u.pitch=1; speechSynthesis.speak(u); }
-let actx; function tone(f,d,type='sine',g=.08){ try{ actx ||= new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(), a=actx.createGain(); o.type=type; o.frequency.value=f; a.gain.value=g; o.connect(a); a.connect(actx.destination); o.start(); a.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d); o.stop(actx.currentTime+d);}catch(e){} }
-
-// ---------- background (seigaiha waves, drawn once) ----------
-const bg=document.createElement('canvas'); bg.width=W*DPR; bg.height=W*DPR;
-{ const b=bg.getContext('2d'); b.scale(DPR,DPR);
-  b.fillStyle=C.bg; b.fillRect(0,0,W,W);
-  const R=S*1.25; b.lineWidth=1;
-  for(let row=-1; row*R<W+R; row++){ const y=row*R, off=(row%2)*R;
-    for(let x=-R+off; x<W+R; x+=2*R){
-      b.fillStyle=C.bg; b.beginPath(); b.arc(x,y,R,0,Math.PI*2); b.fill();
-      for(let k=0;k<4;k++){ b.strokeStyle=`rgba(154,209,178,${0.085-k*0.015})`; b.beginPath(); b.arc(x,y,R-k*R/4,0,Math.PI*2); b.stroke(); }
-    } }
-  b.fillStyle='rgba(241,237,227,0.10)';
-  for(let i=0;i<=N;i++) for(let j=0;j<=N;j++){ b.beginPath(); b.arc(i*S,j*S,1.1,0,7); b.fill(); }
-  const v=b.createRadialGradient(W/2,W/2,W*.35,W/2,W/2,W*.75); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.35)');
-  b.fillStyle=v; b.fillRect(0,0,W,W);
-}
-
-// ---------- game logic ----------
-const rnd=n=>Math.floor(Math.random()*n);
-const free=()=>{ const occ=new Set(snake.map(s=>s.x+','+s.y)); items.forEach(i=>occ.add(i.x+','+i.y)); let p; do{p={x:rnd(N),y:rnd(N)}}while(occ.has(p.x+','+p.y)); return p; };
-function chooseTarget(){
-  const chars=Object.keys(table).filter(c=>c!==lastTarget);
-  const w=chars.map(c=>{const s=st(c); return Math.max(.3, 1 + 3*s.err - .5*s.ok);});
-  let r=Math.random()*w.reduce((a,b)=>a+b,0);
-  for(let i=0;i<chars.length;i++){ r-=w[i]; if(r<=0) return chars[i]; }
-  return chars[chars.length-1];
-}
-function spawn(){
-  items=[]; target=chooseTarget(); lastTarget=target;
-  const pool=confuseOf(target).filter(c=>c in table);
-  const others=Object.keys(table).filter(c=>c!==target && !pool.includes(c) && table[c]!==table[target]);
-  const want=Math.min(4, Object.keys(table).length-1);
-  const d=[]; while(d.length<want){ const src = pool.length && d.length<pool.length ? pool : others; const c=src[rnd(src.length)]; if(!d.includes(c)) d.push(c); }
-  [target,...d].forEach(ch=>{ const p=free(); items.push({...p,ch,correct:ch===target,ph:Math.random()*6.28,born:performance.now()}); });
-  $('cueText').textContent = showRomaji ? table[target] : '♪';
-  speak(target);
-}
-function reset(){
-  buildTable(); pickVoice();
-  snake=[{x:8,y:8,ch:''},{x:7,y:8,ch:''},{x:6,y:8,ch:''}]; prev=[];
-  dir={x:1,y:0}; nextDir=dir; items=[]; score=0; streak=0; tick=230; over=false; paused=false; fx.length=0;
-  $('score').textContent=0; $('streak').textContent=0;
-  spawn(); lastStep=performance.now(); clearInterval(timer); timer=setInterval(step,tick);
-}
-function setSpeed(){ clearInterval(timer); timer=setInterval(step,tick); }
-const px=p=>({x:p.x*S+S/2,y:p.y*S+S/2});
-
-function step(){
-  if(paused||over) return;
-  prev=snake.map(s=>({x:s.x,y:s.y}));
-  dir=nextDir;
-  const h=snake[0], nh={x:(h.x+dir.x+N)%N, y:(h.y+dir.y+N)%N, ch:''};
-  if(snake.some(s=>s.x===nh.x&&s.y===nh.y)){ end(); return; }
-  const hit=items.findIndex(i=>i.x===nh.x&&i.y===nh.y);
-  if(hit>=0){
-    const it=items[hit], c=px(it);
-    if(it.correct){
-      nh.ch=it.ch; snake.unshift(nh);
-      score++; streak++; st(it.ch).ok++; headPop=1;
-      $('score').textContent=score; $('streak').textContent=streak;
-      tone(660,.12); setTimeout(()=>tone(880,.14),90);
-      fx.push({kind:'ring',x:c.x,y:c.y,t0:performance.now(),life:520,col:'154,209,178'});
-      fx.push({kind:'text',x:c.x,y:c.y,t0:performance.now(),life:900,text:table[it.ch],col:C.jb});
-      if(score%5===0 && tick>150){ tick-=10; setSpeed(); }
-      if(score>best) best=score;
-      save(); spawn();
-    } else {
-      snake.unshift(nh); snake.pop(); if(snake.length>2) snake.pop();
-      streak=0; $('streak').textContent=0;
-      st(target).err++; st(it.ch).err++;
-      tone(180,.25,'square',.05); shake=7;
-      fx.push({kind:'ring',x:c.x,y:c.y,t0:performance.now(),life:600,col:'230,59,46'});
-      fx.push({kind:'text',x:c.x,y:c.y,t0:performance.now(),life:1100,text:`${it.ch} ${table[it.ch]}`,col:C.shu});
-      items.splice(hit,1); const p=free(); items.push({...p,ch:it.ch,correct:false,ph:Math.random()*6.28,born:performance.now()});
-      save();
-    }
-  } else { snake.unshift(nh); snake.pop(); }
-  lastStep=performance.now();
-}
-function end(){ over=true; clearInterval(timer); tone(140,.5,'sawtooth',.05); shake=12;
-  setTimeout(()=>toMenu(`run over — ${score} eaten`),700); }
-
-// ---------- rendering (60fps, interpolated between logic ticks) ----------
-const lerp=(a,b,t)=>a+(b-a)*t, ease=t=>1-Math.pow(1-t,3);
-function mix(a,b,t){ const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); const A=p(a),B=p(b); return `rgb(${A.map((v,i)=>Math.round(lerp(v,B[i],t))).join(',')})`; }
-function glyph(ch,x,y,size,maxW){                       // draw a character centred in a box, shrinking to fit
-  ctx.textBaseline='alphabetic';                          // measure AND draw on the same baseline — the bounds are relative to it
-  ctx.font=`700 ${size}px ${KF()}`; let m=ctx.measureText(ch);
-  if(maxW && m.width>maxW){ size*=maxW/m.width; ctx.font=`700 ${size}px ${KF()}`; m=ctx.measureText(ch); }
-  const asc=m.actualBoundingBoxAscent||size*.7, desc=m.actualBoundingBoxDescent||size*.1;
-  ctx.fillText(ch,x,y+(asc-desc)/2); ctx.textBaseline='middle';
-}
-function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-
-function render(now){
-  const t = (over||paused) ? 1 : Math.min(1,(now-lastStep)/tick);
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  ctx.drawImage(bg,0,0,W,W);
-  if(shake>0){ ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake); shake*=.82; if(shake<.3) shake=0; }
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-
-  // paper tiles
-  for(const it of items){
-    const age=Math.min(1,(now-it.born)/260), sc=ease(age), bob=Math.sin(now/520+it.ph)*1.6;
-    const x=it.x*S+S/2, y=it.y*S+S/2+bob, w=(S-8)*sc;
-    ctx.fillStyle='rgba(0,0,0,.35)'; rr(x-w/2+2,y-w/2+3,w,w,6); ctx.fill();
-    ctx.fillStyle=C.washi; rr(x-w/2,y-w/2,w,w,6); ctx.fill();
-    ctx.strokeStyle='rgba(28,37,65,.18)'; ctx.lineWidth=1; rr(x-w/2+2.5,y-w/2+2.5,w-5,w-5,4); ctx.stroke();
-    if(sc>.6){ ctx.fillStyle=C.ink; glyph(it.ch,x,y,S*.62*sc,w*.82); }
-  }
-
-  // snake positions (interpolated, sliding through walls)
-  const wrapPx=v=>((v%W)+W)%W;
-  const pts=snake.map((s,i)=>{ const p=prev[i]; if(!p) return px(s);
-    let ox=p.x, oy=p.y;
-    if(s.x-ox>N/2) ox+=N; else if(ox-s.x>N/2) ox-=N;
-    if(s.y-oy>N/2) oy+=N; else if(oy-s.y>N/2) oy-=N;
-    return {x:wrapPx(lerp(ox,s.x,t)*S+S/2), y:wrapPx(lerp(oy,s.y,t)*S+S/2)}; });
-  const adj=(from,to)=>({x: to.x-from.x>W/2 ? to.x-W : from.x-to.x>W/2 ? to.x+W : to.x,
-                         y: to.y-from.y>W/2 ? to.y-W : from.y-to.y>W/2 ? to.y+W : to.y});
-  const link=(a,b)=>{ const far=Math.hypot(a.x-b.x,a.y-b.y)>S*1.6;
-    ctx.beginPath(); ctx.moveTo(a.x,a.y); const b2=far?adj(a,b):b; ctx.lineTo(b2.x,b2.y); ctx.stroke();
-    if(far){ const a2=adj(b,a); ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(a2.x,a2.y); ctx.stroke(); } };
-  const mirrors=p=>{ const m=[p]; if(p.x<S) m.push({x:p.x+W,y:p.y}); if(p.x>W-S) m.push({x:p.x-W,y:p.y});
-    if(p.y<S) m.push({x:p.x,y:p.y+W}); if(p.y>W-S) m.push({x:p.x,y:p.y-W}); return m; };
-  const L=pts.length;
-  ctx.lineCap='round'; ctx.lineJoin='round';
-  for(let i=L-1;i>=1;i--){
-    const k=i/Math.max(1,L-1);
-    ctx.strokeStyle=mix(C.jade,C.jd,k*.8); ctx.lineWidth=lerp(S*.74,S*.42,k);
-    link(pts[i],pts[i-1]);
-  }
-  ctx.strokeStyle='rgba(255,255,255,.10)';
-  for(let i=L-1;i>=1;i--){ ctx.lineWidth=lerp(S*.22,S*.08,i/Math.max(1,L-1)); link(pts[i],pts[i-1]); }
-  ctx.fillStyle=C.ink;
-  for(let i=1;i<L;i++) if(snake[i].ch) for(const m of mirrors(pts[i])) glyph(snake[i].ch,m.x,m.y,S*.5,S*.6);
-  headPop=Math.max(0,headPop-.08);
-  if(L) for(const h of mirrors(pts[0])){ const r=S*.44*(1+headPop*.25);
-    ctx.fillStyle=C.jb; ctx.beginPath(); ctx.arc(h.x,h.y,r,0,7); ctx.fill();
-    ctx.fillStyle=C.jade; ctx.beginPath(); ctx.arc(h.x-dir.x*r*.35,h.y-dir.y*r*.35,r*.62,0,7); ctx.fill();
-    const ox=dir.y*S*.17, oy=dir.x*S*.17, fx_=dir.x*S*.16, fy=dir.y*S*.16;
-    ctx.fillStyle=C.ink;
-    ctx.beginPath(); ctx.arc(h.x+fx_+ox,h.y+fy+oy,S*.075,0,7); ctx.arc(h.x+fx_-ox,h.y+fy-oy,S*.075,0,7); ctx.fill();
-    ctx.fillStyle=C.washi; ctx.beginPath(); ctx.arc(h.x+fx_+ox+dir.x*1.5,h.y+fy+oy+dir.y*1.5,S*.028,0,7); ctx.arc(h.x+fx_-ox+dir.x*1.5,h.y+fy-oy+dir.y*1.5,S*.028,0,7); ctx.fill();
-    if(Math.floor(now/900)%3===0){ ctx.strokeStyle=C.shu; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(h.x+dir.x*r,h.y+dir.y*r); ctx.lineTo(h.x+dir.x*(r+S*.28),h.y+dir.y*(r+S*.28)); ctx.stroke(); }
-  }
-
-  for(let i=fx.length-1;i>=0;i--){ const f=fx[i], u=(now-f.t0)/f.life; if(u>=1){ fx.splice(i,1); continue; }
-    if(f.kind==='ring'){ ctx.strokeStyle=`rgba(${f.col},${1-u})`; ctx.lineWidth=3*(1-u)+1; ctx.beginPath(); ctx.arc(f.x,f.y,S*.3+ease(u)*S*1.3,0,7); ctx.stroke(); }
-    else { ctx.fillStyle=f.col; ctx.globalAlpha=1-u*u; ctx.font=`500 ${S*.55}px ${MF()}`; ctx.fillText(f.text,f.x,f.y-ease(u)*S*1.2); ctx.globalAlpha=1; }
-  }
-
-  if(paused){ ctx.fillStyle='rgba(28,37,65,.72)'; ctx.fillRect(0,0,W,W); ctx.fillStyle=C.washi; ctx.font=`700 42px ${DF()}`; ctx.fillText('paused',W/2,W/2); }
-  requestAnimationFrame(render);
-}
-requestAnimationFrame(render);
-
-// ---------- input ----------
-const D={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
-function turn(d){ const nd=D[d]; if(!nd) return; if(nd.x===-dir.x&&nd.y===-dir.y) return; nextDir=nd; }
-addEventListener('keydown',e=>{
-  if(e.target.tagName==='SELECT' || $('learn').classList.contains('show') || !$('menuScr').hidden) return;
-  const k={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'}[e.key];
-  if(k){ e.preventDefault(); turn(k); }
-  else if(e.key===' '){ e.preventDefault(); speak(target); }
-  else if(e.key==='p'||e.key==='P'){ paused=!paused; }
-});
-let tx,ty; cv.addEventListener('pointerdown',e=>{tx=e.clientX;ty=e.clientY;});
-cv.addEventListener('pointerup',e=>{ const dx=e.clientX-tx, dy=e.clientY-ty; if(Math.hypot(dx,dy)<18) return; turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up')); });
-document.querySelectorAll('.pad button').forEach(b=>b.addEventListener('pointerdown',()=>turn(b.dataset.d)));
-$('seal').addEventListener('click',()=>speak(target));
-
-// ---------- learn / revise chart ----------
-let weakFirst=false, wasPaused=false;
-const COLS={ja:5,zh:6,ru:6,hi:5};
-function renderChart(){
-  let chars=Object.keys(table);
-  if(weakFirst) chars=[...chars].sort((a,b)=>(st(b).err-st(a).err)||(st(a).ok-st(b).ok));
-  $('chart').style.setProperty('--cols',COLS[lang]||5);
-  $('learnTitle').textContent=`${LANGS[lang].name} · ${setName}`;
-  $('chart').innerHTML=chars.map(c=>{ const x=st(c); const cls=x.err>0?'weak':(x.ok>=3?'mastered':'');
-    return `<div class="tile ${cls}" data-ch="${c}" role="button" tabindex="0"><b>${c}</b><i>${table[c]}</i>${x.err>0?`<em>×${x.err}</em>`:''}</div>`; }).join('');
-  $('chart').querySelectorAll('.tile').forEach(t=>{ const go=()=>{ speak(t.dataset.ch); t.style.transform='scale(.95)'; setTimeout(()=>t.style.transform='',90); };
-    t.addEventListener('click',go); t.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); });
-  $('sortBtn').textContent=weakFirst?'chart order':'weakest first';
-}
-function openLearn(){ wasPaused=paused; paused=true; renderChart(); $('learn').classList.add('show'); }
-function closeLearn(){ $('learn').classList.remove('show'); paused=wasPaused; lastStep=performance.now(); }
-$('menuLearnBtn').addEventListener('click',openLearn);
-$('learnClose').addEventListener('click',closeLearn);
-$('sortBtn').addEventListener('click',()=>{ weakFirst=!weakFirst; renderChart(); });
-$('resetBtn').addEventListener('click',()=>{ if(!confirm(`Clear your ${LANGS[lang].name} progress?`)) return;
-  for(const c of Object.keys(table)) delete stats[c]; save(); renderChart(); });
-$('playBtn').addEventListener('click',()=>{ showMenu(false); $('pauseBtn').textContent='‖ pause'; reset(); });
-$('pauseBtn').addEventListener('click',()=>{ if(over) return; paused=!paused; $('pauseBtn').textContent=paused?'▶ resume':'‖ pause'; if(!paused) lastStep=performance.now(); });
-$('quitBtn').addEventListener('click',()=>{ if(!over){ over=true; clearInterval(timer); } toMenu(`run: ${score} eaten`); });
-$('showSnd').addEventListener('change',e=>{ showRomaji=e.target.checked; $('cueText').textContent=showRomaji?(table[target]||'—'):'♪'; $('seal').classList.toggle('hidden-cue',!showRomaji); save(); });
-addEventListener('keydown',e=>{ if(e.target.tagName==='SELECT') return;
-  if(e.key==='l'||e.key==='L'){ $('learn').classList.contains('show')?closeLearn():openLearn(); }
-  else if(e.key==='Escape' && $('learn').classList.contains('show')) closeLearn(); });
-
-$('showSnd').checked=showRomaji; $('seal').classList.toggle('hidden-cue',!showRomaji);
-buildTable(); buildMenu(); showMenu(true);
-</script>
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>

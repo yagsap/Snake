@@ -1,0 +1,75 @@
+# Script Snake
+
+Snake, but the food is a writing system: a character is spoken aloud, and you
+steer onto the glyph that matches it. Wrong bites cost body segments and teach
+you the answer. Supports Japanese kana, HSK-1 hanzi, Cyrillic, and Devanagari,
+with distractors drawn from visually confusable lookalikes and a light
+spaced-repetition bias toward the characters you miss.
+
+## Run it
+
+```
+npm install
+npm run dev        # dev server
+npm run build      # typecheck + production build to dist/
+```
+
+## Architecture
+
+The project is deliberately structured to demonstrate core game-development
+fundamentals. Each module's header comment explains the *why*; this is the map.
+
+```
+src/
+  core/            engine — knows nothing about snakes or kana
+    loop.ts        fixed-timestep loop with interpolated rendering
+    time.ts        frame-rate-independent decay (damp), easings
+    input.ts       2-deep direction buffer, device bindings
+    scene.ts       stack-based scene machine (menu/play/pause/chart/gameover)
+    rng.ts         seeded RNG (mulberry32) — reproducible runs
+    events.ts      typed event bus — simulation emits facts, never touches DOM
+    storage.ts     validated load, debounced save
+  data/
+    scripts.ts     character tables, confusable groups (indexed at load)
+  game/            simulation — runs headless, no DOM required
+    config.ts      every tunable number, named, units stated
+    world.ts       the rules: movement, collision, bites, death
+    spawn.ts       target selection (error-weighted) + distractor choice
+    progression.ts difficulty & reward curves as pure functions
+    modes.ts       drift (wrap) / ink (walls) / gale (walls, fast ramp)
+  render/          presentation — reads simulation state, never writes it
+    renderer.ts    interpolated canvas drawing, glyph metrics cache
+    camera.ts      trauma-based screen shake, hit-stop
+    fx.ts          particles, rings, score popups, screen flash
+    background.ts  seigaiha field baked once to an offscreen canvas
+  ui/
+    hud.ts         change-detecting DOM writes, animated score count-up
+    menus.ts       menu / study chart / game-over views
+    audio.ts       speech cues + WebAudio feedback tones
+  main.ts          composition root — the only file that knows everyone
+```
+
+### The fundamentals, and where to look
+
+| Principle | Where |
+|---|---|
+| Fixed timestep, render interpolation, spiral-of-death clamp | `core/loop.ts` |
+| Frame-rate-independent decay (`damp`, time constants in seconds) | `core/time.ts`, used by `render/camera.ts` |
+| Input buffering (fast double-taps don't drop) | `core/input.ts` |
+| Scene stack instead of boolean flags | `core/scene.ts`, wired in `main.ts` |
+| Simulation/presentation split via events | `game/world.ts` emits; `main.ts` subscribes |
+| Deterministic, seedable randomness | `core/rng.ts` |
+| All tunables centralized with units | `game/config.ts` |
+| Difficulty as a curve, not steps (exponential approach to a floor) | `game/progression.ts` |
+| Risk/reward economy (combo multiplier + decaying speed bonus) | `game/progression.ts`, urgency ring in `renderer.ts` |
+| Trauma-model screen shake (shake = trauma², smooth noise, rotation) | `render/camera.ts` |
+| Hit-stop | `render/camera.ts` + `main.ts` |
+| Squash-and-stretch (volume-conserving) | `renderer.ts` `drawHead` |
+| Bounded spawn (no unbounded rejection sampling) | `game/spawn.ts` `freeCells` |
+| Tail-cell self-collision rule (following your tail is legal) | `game/world.ts` `step` |
+| Static art baked to offscreen canvas | `render/background.ts` |
+| Text-metrics caching, DOM write avoidance | `renderer.ts`, `ui/hud.ts` |
+| Pause on tab hide, debounced+validated persistence | `main.ts`, `core/storage.ts` |
+| Accessibility: reduced motion, audio-optional play | `render/*.intensity`, `showRomaji` |
+
+The original single-file prototype is preserved in `prototype/index.html`.
