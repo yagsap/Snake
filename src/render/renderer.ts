@@ -268,8 +268,6 @@ export class Renderer {
       const x = it.x * CELL + CELL / 2
       const y = it.y * CELL + CELL / 2 + bob
 
-      if (it.correct) this.drawUrgency(x, y, world)
-
       // No card behind the character: a box can be overflowed by a tall
       // script (Devanagari ascenders escaped it on every phone font tried),
       // but a bare glyph has nothing to escape. The shadow lifts it off the
@@ -290,18 +288,23 @@ export class Renderer {
   }
 
   /**
-   * The speed-bonus clock, drawn as a shrinking arc around the target.
+   * The speed-bonus clock, drawn as a shrinking arc around the snake's HEAD.
    *
    * The bonus is the game's whole risk/reward axis — cross the board fast and
    * get paid, or play it safe and get less. A reward the player cannot see
    * draining is not a decision, it is a surprise, so the timer is on the board
-   * rather than in the HUD where nobody looks mid-run.
+   * rather than in the HUD where nobody looks mid-run. It circles the head,
+   * not the target: around the target it answered the question for anyone who
+   * watched for the ring, which gutted the discrimination the game exists to
+   * teach. Around the head it reads as "your bonus, draining" — and the head
+   * is where the player's eye already lives.
    */
   private drawUrgency(x: number, y: number, world: World): void {
+    if (!world.alive) return
     const factor = speedBonusFactor(world.targetAge)
     if (factor <= 0) return
     const ctx = this.ctx
-    const r = CELL * 0.62
+    const r = CELL * 0.72
     // Gold while the full bonus holds, cooling to red as it fades.
     ctx.strokeStyle =
       world.targetAge <= SCORING.bonusWindow
@@ -450,6 +453,7 @@ export class Renderer {
     const r = CELL * 0.44
 
     for (const h of mirrors(head)) {
+      this.drawUrgency(h.x, h.y, world)
       ctx.save()
       ctx.translate(h.x, h.y)
       // Rotate into the direction of travel so squash and stretch align with
