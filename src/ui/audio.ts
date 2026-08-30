@@ -1,5 +1,5 @@
 import { LANGUAGES, type LangId } from '../data/scripts'
-import { nativeSpeak } from './native'
+import { isNativeApp, nativeSpeak } from './native'
 
 /**
  * Speech (the cue) and synthesised tones (the feedback).
@@ -16,6 +16,11 @@ export class Speech {
   private voice: SpeechSynthesisVoice | null = null
   private available: SpeechSynthesisVoice[] = []
   private warmedVoice: string | null = null
+  /** Utterance in flight, referenced so Chrome's GC cannot eat its events. */
+  private currentU: SpeechSynthesisUtterance | null = null
+  /** Newest cue waiting for the engine to free up (coalesced, never queued). */
+  private pendingText: string | null = null
+  private pendingSince = 0
 
   /** Called whenever the usable voice list changes, so the UI can re-render. */
   onVoicesChanged: (() => void) | null = null
@@ -81,44 +86,110 @@ export class Speech {
    * as the snake freezing. Warm engines stay warm, so this is once per voice.
    * Must be called from within a user gesture: browsers refuse speech before
    * one, exactly like audio.
+   *
+   * The utterance is REAL text at volume 0, not whitespace: WebKit
+   * short-circuits empty/whitespace utterances without ever touching the
+   * engine, which made a ' ' warmup a no-op exactly where it mattered (iOS).
+   * The language's own word for "snake" is short, always valid, and silent.
    */
   warmup(): void {
+    // The native synthesizer runs off the webview thread — nothing to warm.
+    if (isNativeApp) return
     const voice = this.voice
     if (!voice || this.warmedVoice === voice.name) return
     this.warmedVoice = voice.name
-    const u = new SpeechSynthesisUtterance(' ')
+    const u = new SpeechSynthesisUtterance(LANGUAGES[this.lang].word)
     u.voice = voice
     u.lang = voice.lang
     u.volume = 0
+    u.rate = 2
+    // If the browser refuses (no user activation yet, engine error), un-latch
+    // so a later gesture retries instead of trusting warmth that never
+    // happened — iOS grants activation on pointerUP/keydown, not pointerdown,
+    // and a mis-latched warmup here was exactly how the lag came back.
+    u.onerror = () => {
+      if (this.warmedVoice === voice.name) this.warmedVoice = null
+      this.finish(u)
+    }
+    // Same finish path as a real cue: a cue that lands while the warmup is
+    // still sounding parks in pendingText and must drain when it ends.
+    u.onend = () => this.finish(u)
+    this.currentU = u
     speechSynthesis.speak(u)
+  }
+
+  /** An utterance ended or failed: release it and play the waiting cue. */
+  private finish(u: SpeechSynthesisUtterance): void {
+    if (this.currentU === u) this.currentU = null
+    const next = this.pendingText
+    this.pendingText = null
+    if (next) this.speakNow(next)
+  }
+
+  /**
+   * Forget that the engine was warmed. Called when the app is backgrounded:
+   * the OS may unload the voice while we are hidden, and the next foreground
+   * gesture should quietly re-prime it rather than trust stale warmth.
+   */
+  chill(): void {
+    this.warmedVoice = null
   }
 
   speak(text: string): void {
     if (!text) return
+    // In the app shell, AVSpeechSynthesizer does all of this off the webview
+    // thread — the whole class of speak/cancel main-thread stalls vanishes.
+    if (isNativeApp && nativeSpeak(text, this.lang)) return
     if (!this.voice) {
       // No webview voice for this language — try the native synthesizer.
       nativeSpeak(text, this.lang)
       return
     }
-    const voice = this.voice
     // Deferred a tick: TTS engine startup is main-thread work on several
     // platforms, and the frame it would otherwise share is the one drawing
     // the eat feedback. One frame of cue latency is imperceptible; a hitch
     // on the reward frame is not.
     setTimeout(() => {
       if (speechSynthesis.speaking || speechSynthesis.pending) {
-        speechSynthesis.cancel()
+        /**
+         * COALESCE, never cancel(). cancel-then-speak on every eat is
+         * blocking IPC to the speech daemon — the recurring mid-run hitch —
+         * and WebKit is known to drop the new utterance outright when the
+         * two are called back to back. The newest cue simply replaces any
+         * waiting one and plays the moment the engine frees up; stale cues
+         * are dropped, so fast eaters always hear the current question.
+         */
+        if (this.pendingText === null) this.pendingSince = performance.now()
+        this.pendingText = text
+        // Failsafe: end events are lost on some platforms. If a cue has been
+        // waiting unreasonably long, the engine is wedged — the old cancel
+        // path is then better than going silent for the rest of the run.
+        if (performance.now() - this.pendingSince > 1500) {
+          this.pendingText = null
+          speechSynthesis.cancel()
+          this.speakNow(text)
+        }
+        return
       }
-      const u = new SpeechSynthesisUtterance(
-        // A trailing ideographic stop makes ja/zh voices read a bare character
-        // with sentence intonation instead of clipping it.
-        /^(ja|zh)/.test(voice.lang) ? `${text}。` : text,
-      )
-      u.voice = voice
-      u.lang = voice.lang
-      u.rate = 0.9
-      speechSynthesis.speak(u)
+      this.speakNow(text)
     }, 0)
+  }
+
+  private speakNow(text: string): void {
+    const voice = this.voice
+    if (!voice) return
+    const u = new SpeechSynthesisUtterance(
+      // A trailing ideographic stop makes ja/zh voices read a bare character
+      // with sentence intonation instead of clipping it.
+      /^(ja|zh)/.test(voice.lang) ? `${text}。` : text,
+    )
+    u.voice = voice
+    u.lang = voice.lang
+    u.rate = 0.9
+    u.onend = () => this.finish(u)
+    u.onerror = () => this.finish(u)
+    this.currentU = u
+    speechSynthesis.speak(u)
   }
 }
 

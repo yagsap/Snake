@@ -155,7 +155,6 @@ function makePlayScene(r: RunConfig): Scene {
       renderer.reset()
       hitStop.clear()
       tones.warmup() // we are inside the click that started the run
-      speech.warmup()
 
       const w = new World({
         table: r.table,
@@ -675,16 +674,45 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     if (scenes.top?.name === 'play' && world?.alive) scenes.push(makePauseScene())
     saveNow(data)
+    // The OS may unload the TTS voice while we're hidden; re-prime it on the
+    // first gesture after coming back so the reload happens behind the pause
+    // screen, not on the next cue mid-run.
+    speech.chill()
+    armSpeechWarmup()
   }
 })
 addEventListener('pagehide', () => saveNow(data))
 
-speech.onVoicesChanged = syncVoices
+speech.onVoicesChanged = () => {
+  syncVoices()
+  // Voice lists arrive asynchronously (Chrome can take hundreds of ms). If a
+  // gesture already happened, warm the engine now — warmup un-latches itself
+  // on refusal, so calling early costs nothing.
+  speech.warmup()
+}
 
-// Prime the TTS engine on the first gesture anywhere, so the voice loads
-// while the player is still reading the menu — not mid-run on the first cue.
-addEventListener('pointerdown', () => speech.warmup(), { once: true, capture: true })
-addEventListener('keydown', () => speech.warmup(), { once: true, capture: true })
+/**
+ * Prime the TTS engine on the first gesture anywhere, so the voice loads
+ * while the player is still reading the menu — not mid-run on the first cue.
+ * pointerUP and keydown, deliberately: those are the events that actually
+ * grant user activation for touch and keyboard (pointerdown does not for
+ * touch, which left iOS silently unprimed). One armed pair at a time; fired
+ * or not, the pair cleans itself up before the next arming.
+ */
+let warmupArmed = false
+function armSpeechWarmup(): void {
+  if (warmupArmed) return
+  warmupArmed = true
+  const fire = () => {
+    warmupArmed = false
+    removeEventListener('pointerup', fire, true)
+    removeEventListener('keydown', fire, true)
+    speech.warmup()
+  }
+  addEventListener('pointerup', fire, { once: true, capture: true })
+  addEventListener('keydown', fire, { once: true, capture: true })
+}
+armSpeechWarmup()
 
 // -------------------------------------------------------------------- loop --
 

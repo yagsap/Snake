@@ -129,6 +129,12 @@ export class Renderer {
   /** 0..1, decaying. Drives the recoil after a wrong bite. */
   private recoil = 0
   private clock = 0
+  /**
+   * Body gradient colours, cached per snake length. mixHex allocates arrays
+   * and strings; at 60fps times every segment that churn is real GC pressure
+   * on phones, and the colours only change when the snake grows or shrinks.
+   */
+  private bodyColors: string[] = []
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
@@ -265,8 +271,13 @@ export class Renderer {
       const grow = clamp01(it.age / 0.26)
       const scale = easeOutBack(grow)
       const bob = Math.sin(this.clock * 1.9 + it.phase) * 1.6
-      const x = it.x * CELL + CELL / 2
-      const y = it.y * CELL + CELL / 2 + bob
+      // Pull edge-cell glyphs a few pixels inboard: a glyph centred in a
+      // boundary cell has its ink flush against the canvas edge, where the
+      // bob, the shadow, or a font's optimistic metrics get it cropped.
+      // Interior cells are untouched — the clamp only bites on the rim.
+      const margin = CELL / 2 + 3
+      const x = Math.min(W - margin, Math.max(margin, it.x * CELL + CELL / 2))
+      const y = Math.min(W - margin, Math.max(margin, it.y * CELL + CELL / 2 + bob))
 
       // No card behind the character: a box can be overflowed by a tall
       // script (Devanagari ascenders escaped it on every phone font tried),
@@ -274,14 +285,18 @@ export class Renderer {
       // wave field, and dropping the card bought room for much bigger ink.
       ctx.save()
       ctx.shadowColor = 'rgba(0,0,0,.55)'
-      ctx.shadowBlur = 8
+      // Blur cost grows with radius squared and this runs per glyph per
+      // frame on phone GPUs; 3 reads the same at cell size as 8 did.
+      ctx.shadowBlur = 3
       ctx.shadowOffsetY = 2
       ctx.fillStyle = THEME.washi
       if (world.reverse) {
         // Reverse level: tiles show the SOUND; the cue shows the glyph.
-        glyph(ctx, world.soundOf(it.ch), x, y, CELL * 0.42 * scale, CELL * 0.94, CELL * 0.94)
+        glyph(ctx, world.soundOf(it.ch), x, y, CELL * 0.46 * scale, CELL, CELL)
       } else {
-        glyph(ctx, it.ch, x, y, CELL * 0.78 * scale, CELL * 0.94, CELL * 0.94)
+        // A full cell of ink: with no card to fit inside, readability is the
+        // only constraint that matters, especially at phone sizes.
+        glyph(ctx, it.ch, x, y, CELL * 0.88 * scale, CELL, CELL)
       }
       ctx.restore()
     }
@@ -399,10 +414,15 @@ export class Renderer {
 
     // Body, tail-first so the head overlaps everything behind it. A wrong bite
     // washes the body toward vermilion for as long as the recoil lasts.
+    if (this.bodyColors.length !== len) {
+      this.bodyColors = Array.from({ length: len }, (_, i) =>
+        mixHex(THEME.jade, THEME.jadeDeep, (i / Math.max(1, len - 1)) * 0.8),
+      )
+    }
     const bodyTint = this.recoil > 0 ? easeOutCubic(this.recoil) * 0.55 : 0
     for (let i = len - 1; i >= 1; i--) {
       const k = i / Math.max(1, len - 1)
-      const base = mixHex(THEME.jade, THEME.jadeDeep, k * 0.8)
+      const base = this.bodyColors[i] as string
       ctx.strokeStyle = bodyTint > 0 ? mixHex(base, THEME.shu, bodyTint) : base
       ctx.lineWidth = lerp(CELL * 0.74, CELL * 0.42, k)
       link(pts[i] as { x: number; y: number }, pts[i - 1] as { x: number; y: number })

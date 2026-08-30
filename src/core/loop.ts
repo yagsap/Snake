@@ -29,8 +29,17 @@ export const FIXED_DT = 1 / FIXED_HZ
  * clamp, returning to a tab that was hidden for five minutes would try to run
  * 18,000 steps in one frame, block the main thread, produce an even bigger
  * gap next frame, and never recover — the "spiral of death".
+ *
+ * It is deliberately TIGHT — six fixed steps. When something outside our
+ * control stalls the main thread (a TTS engine loading, a GC pause), the
+ * stall itself is one lost frame; what players actually report as "lag" is
+ * the catch-up afterwards, when a quarter second of owed time lurches the
+ * snake several cells in one frame. Clamping low trades that teleport for a
+ * few milliseconds of lost game time nobody can perceive. 0.1 and not lower:
+ * browsers with quantized timers (Firefox resistFingerprinting rounds rAF to
+ * 100ms) must not lose time on EVERY frame, or the whole game runs slow.
  */
-const MAX_FRAME_TIME = 0.25
+const MAX_FRAME_TIME = 0.1
 
 export interface LoopCallbacks {
   /** Advance the simulation by exactly `dt` seconds. Called 0..N times a frame. */

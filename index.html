@@ -24,6 +24,8 @@
   @media (pointer:coarse){:root{--chrome-h:390px}}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--indigo);color:var(--washi);font-family:var(--mono);-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   body{height:100vh;height:100dvh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(14px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
+  /* Phones: give the board nearly the full width — every pixel is play area. */
+  @media (pointer:coarse){body{padding-left:calc(4px + env(safe-area-inset-left,0px));padding-right:calc(4px + env(safe-area-inset-right,0px))}}
   .scr{width:100%;max-width:520px;display:flex;flex-direction:column;gap:12px}
   .ov{position:fixed;inset:0;z-index:10;background:rgba(28,37,65,.86);backdrop-filter:blur(3px);display:grid;place-items:center;overflow:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
   .ov[hidden]{display:none}
@@ -55,7 +57,7 @@
   .setgrp label{display:flex;align-items:center;gap:8px;justify-content:space-between}
   .setgrp select{max-width:200px}
   select{background:var(--indigo-2);color:var(--washi);border:1px solid var(--grid);border-radius:4px;font:500 11px var(--mono);padding:4px 6px}
-  .seal{width:52px;height:52px;overflow:hidden;border:3px solid var(--shu);border-radius:6px;display:grid;place-items:center;color:var(--shu);font:700 17px/1 var(--disp);letter-spacing:.02em;position:relative;cursor:pointer;user-select:none;transition:transform .08s}
+  .seal{width:58px;height:58px;overflow:hidden;border:3px solid var(--shu);border-radius:6px;display:grid;place-items:center;color:var(--shu);font:700 19px/1 var(--disp);letter-spacing:.02em;position:relative;cursor:pointer;user-select:none;transition:transform .08s}
   .seal:active{transform:scale(.96)}
   .seal.pulse{animation:pulse .6s ease-out}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(230,59,46,.55)}100%{box-shadow:0 0 0 18px rgba(230,59,46,0)}}
@@ -102,7 +104,7 @@
   .wordline span.done{color:var(--jade)}
   .wordline span.now{color:var(--washi);border-bottom:2px solid var(--gold)}
   .wordline span.todo{color:var(--mist);opacity:.55}
-  .seal.glyph-cue #cueText{font:700 30px var(--glyph)}
+  .seal.glyph-cue #cueText{font:700 34px var(--glyph)}
   .camp-card{width:min(94vw,380px);max-height:82vh;display:flex;flex-direction:column}
   .campTitle{margin:0;font:700 19px var(--disp)}
   .camp-list{overflow:auto;display:flex;flex-direction:column;gap:6px;margin-top:10px}
