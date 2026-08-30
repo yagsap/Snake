@@ -28,7 +28,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build          # tsc --noEmit && vite build
+      # Best-effort: enables Pages when possible, but a failure here must not
+      # block the deploy — the site can also be enabled once in repo Settings.
       - uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
