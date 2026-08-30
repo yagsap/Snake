@@ -10,12 +10,20 @@ const table = (src: string): CharTable =>
 
 export type CharTable = Record<string, string>
 
+/**
+ * Base syllabary first, then the voiced (dakuten) and half-voiced (handakuten)
+ * rows — the chart renders in source order, so the learner sees the layers.
+ * All voiced kana are precomposed NFC forms: single UTF-16 code units, so the
+ * `x[0]` split above stays safe. ぢ/づ (and ヂ/ヅ) share romanisations with
+ * じ/ず on purpose; the spawn and word systems never place same-sound
+ * characters together, so the cue is never ambiguous.
+ */
 export const HIRAGANA = table(
-  'あa いi うu えe おo かka きki くku けke こko さsa しshi すsu せse そso たta ちchi つtsu てte とto なna にni ぬnu ねne のno はha ひhi ふfu へhe ほho まma みmi むmu めme もmo やya ゆyu よyo らra りri るru れre ろro わwa をwo んn',
+  'あa いi うu えe おo かka きki くku けke こko さsa しshi すsu せse そso たta ちchi つtsu てte とto なna にni ぬnu ねne のno はha ひhi ふfu へhe ほho まma みmi むmu めme もmo やya ゆyu よyo らra りri るru れre ろro わwa をwo んn がga ぎgi ぐgu げge ごgo ざza じji ずzu ぜze ぞzo だda ぢji づzu でde どdo ばba びbi ぶbu べbe ぼbo ぱpa ぴpi ぷpu ぺpe ぽpo',
 )
 
 export const KATAKANA = table(
-  'アa イi ウu エe オo カka キki クku ケke コko サsa シshi スsu セse ソso タta チchi ツtsu テte トto ナna ニni ヌnu ネne ノno ハha ヒhi フfu ヘhe ホho マma ミmi ムmu メme モmo ヤya ユyu ヨyo ラra リri ルru レre ロro ワwa ヲwo ンn',
+  'アa イi ウu エe オo カka キki クku ケke コko サsa シshi スsu セse ソso タta チchi ツtsu テte トto ナna ニni ヌnu ネne ノno ハha ヒhi フfu ヘhe ホho マma ミmi ムmu メme モmo ヤya ユyu ヨyo ラra リri ルru レre ロro ワwa ヲwo ンn ガga ギgi グgu ゲge ゴgo ザza ジji ズzu ゼze ゾzo ダda ヂji ヅzu デde ドdo バba ビbi ブbu ベbe ボbo パpa ピpi プpu ペpe ポpo',
 )
 
 export const HANZI = table(
@@ -102,9 +110,15 @@ export const CONFUSABLE_GROUPS: readonly string[] = [
   'さきち', 'はほま', 'ぬめ', 'わねれ', 'るろ', 'いり', 'こに', 'あお', 'つう',
   'しも', 'たな', 'けは', 'ふら', 'くへ', 'そろ', 'ゆや', 'のめあ', 'よま',
   'んえ', 'ひへ',
+  // hiragana dakuten families — the discrimination is the dots, not the base
+  'かが', 'きぎ', 'くぐ', 'けげ', 'こご', 'さざ', 'しじ', 'すず', 'せぜ', 'そぞ',
+  'ただ', 'ちぢ', 'つづ', 'てで', 'とど', 'はばぱ', 'ひびぴ', 'ふぶぷ', 'へべぺ', 'ほぼぽ',
   // katakana
   'シツ', 'ソン', 'クケタ', 'コユ', 'チテ', 'ナメ', 'ワウフ', 'アマ', 'ヌス',
   'ルレ', 'ミニ', 'ハヘ', 'オホ', 'サセ', 'ヨヲ', 'ラヲ', 'イト', 'エユ', 'リソ',
+  // katakana dakuten families
+  'カガ', 'キギ', 'クグ', 'ケゲ', 'コゴ', 'サザ', 'シジ', 'スズ', 'セゼ', 'ソゾ',
+  'タダ', 'チヂ', 'ツヅ', 'テデ', 'トド', 'ハバパ', 'ヒビピ', 'フブプ', 'ヘベペ', 'ホボポ',
   // hanzi
   '人入', '大天太夫', '己已', '土士', '日曰目', '未末', '王玉', '千干于',
   '木本', '力刀', '今令', '田由甲', '白百', '手毛', '午牛', '二三', '小水',

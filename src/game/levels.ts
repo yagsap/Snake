@@ -197,15 +197,49 @@ const JA: Draft[] = [
   ]),
   ear('the full syllabary', 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん', { goal: G(15, 4), wrap: false }),
   gauntlet('every lookalike', 'るろれわねめぬあおさきちはほま', { goal: G(15, 2), paceScale: 1.3, layout: 'box' }),
-  // へび itself needs the voiced び — the dakuten rows are a future chapter.
   words('the menagerie', [
     { w: 'かめ', gloss: 'turtle' }, { w: 'さる', gloss: 'monkey' },
     { w: 'とら', gloss: 'tiger' }, { w: 'りす', gloss: 'squirrel' },
     { w: 'くま', gloss: 'bear' }, { w: 'うし', gloss: 'cow' },
   ], { goal: G(6, 3), wrap: false }),
+  // The dakuten arc: each voiced row is taught against its unvoiced base,
+  // because the base IS the confusion — the only difference is the dots.
+  chapter('two little dots', 'がぎぐげごかきくけこ'),
+  chapter('the buzzing row', 'ざじずぜぞさしすせそ'),
+  chapter('the d row', 'だぢづでどたちつてと', { layout: 'garden' }),
+  chapter('b & p rows', 'ばびぶべぼぱぴぷぺぽはひふへほ'),
+  gauntlet('dot or circle', 'ばぱびぴぶぷべぺぼぽ', { goal: G(12, 2) }),
+  words('voiced words', [
+    { w: 'へび', gloss: 'snake — that’s you' }, { w: 'みず', gloss: 'water' },
+    { w: 'かぜ', gloss: 'wind' }, { w: 'たまご', gloss: 'egg' },
+    { w: 'めがね', gloss: 'glasses' }, { w: 'ぶた', gloss: 'pig' },
+    { w: 'ねずみ', gloss: 'mouse' }, { w: 'りんご', gloss: 'apple' },
+    { w: 'ぞう', gloss: 'elephant' }, { w: 'でんわ', gloss: 'telephone' },
+  ]),
+  ear('by ear: voiced', 'がぎぐげござじずぜぞだでどばびぶべぼぱぴぷぺぽかさたは', { goal: G(15, 4) }),
   chapter('katakana begins', 'アイウエオカキクケコ'),
   gauntlet('the infamous four', 'シツソン', { paceScale: 1.1 }),
   gauntlet('ku·ke·ta / wa·u·fu', 'クケタワウフ'),
+  chapter('the s & t rows', 'サシスセソタチツテトカキクケコ'),
+  chapter('n & h rows', 'ナニヌネノハヒフヘホサシスセソ', { layout: 'torii' }),
+  gauntlet('needle points', 'シツソンリ'),
+  chapter('m & y rows', 'マミムメモヤユヨナニヌネノ'),
+  chapter('r & w rows', 'ラリルレロワヲンマミムメモ', { layout: 'garden' }),
+  reverse('recall: katakana', 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン'),
+  words('borrowed words', [
+    { w: 'カメラ', gloss: 'camera' }, { w: 'ホテル', gloss: 'hotel' },
+    { w: 'ミルク', gloss: 'milk' }, { w: 'アニメ', gloss: 'anime' },
+    { w: 'メロン', gloss: 'melon' }, { w: 'ピアノ', gloss: 'piano' },
+    { w: 'テレビ', gloss: 'TV' }, { w: 'パンダ', gloss: 'panda' },
+    { w: 'バス', gloss: 'bus' }, { w: 'ペン', gloss: 'pen' },
+  ]),
+  ear('by ear: katakana', 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン', { goal: G(15, 4), wrap: false }),
+  gauntlet('the final exam', 'シツソンクケタワウフヌスコユチテルレ', { goal: G(15, 2), paceScale: 1.3, layout: 'box' }),
+  words('menagerie II', [
+    { w: 'コアラ', gloss: 'koala' }, { w: 'ゴリラ', gloss: 'gorilla' },
+    { w: 'ライオン', gloss: 'lion' }, { w: 'クジラ', gloss: 'whale' },
+    { w: 'ラクダ', gloss: 'camel' }, { w: 'キリン', gloss: 'giraffe' },
+  ], { goal: G(6, 3), wrap: false }),
 ]
 
 const ZH: Draft[] = [
@@ -273,6 +307,11 @@ const HI: Draft[] = [
   ]),
   reverse('recall: consonants', 'कखगघचछजझटठडढणतथदधनपफबभमयरलवशषसह'),
   ear('by ear: everything', 'अआइईउऊएऐओऔकखगघचछजझटठडढणतथदधनपफबभमयरलवशषसह', { goal: G(15, 4) }),
+  words('words II', [
+    { w: 'नमक', gloss: 'salt' }, { w: 'महल', gloss: 'palace' },
+    { w: 'पवन', gloss: 'breeze' }, { w: 'रथ', gloss: 'chariot' },
+    { w: 'वजन', gloss: 'weight' }, { w: 'शहद', gloss: 'honey' },
+  ], { wrap: false }),
 ]
 
 const DRAFTS: Record<LangId, Draft[]> = { ja: JA, zh: ZH, ru: RU, hi: HI }
