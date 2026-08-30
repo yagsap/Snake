@@ -57,8 +57,9 @@
   .seal small{position:absolute;bottom:2px;font:400 8px var(--mono);letter-spacing:.1em;color:var(--shu-soft)}
   .seal.hidden-cue{font-size:24px}
   canvas{width:100%;max-width:520px;aspect-ratio:1;background:var(--indigo);border:1px solid var(--grid);border-radius:8px;touch-action:none;display:block;box-shadow:0 18px 40px -20px rgba(0,0,0,.7)}
-  .pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,64px);gap:12px;margin:10px auto 0}
-  .pad button{background:var(--indigo-2);border:1px solid var(--grid);border-radius:10px;color:var(--washi);font-size:26px}
+  .pad{display:none;grid-template-columns:repeat(3,86px);grid-template-rows:repeat(2,74px);gap:16px;margin:14px auto 0}
+  .pad button{background:var(--indigo-2);border:1px solid var(--grid);border-radius:14px;color:var(--washi);font-size:32px}
+  .pad button:active{background:var(--grid)}
   .pad button:nth-child(1){grid-column:2}
   .pad button:nth-child(2){grid-column:1;grid-row:2}
   .pad button:nth-child(3){grid-column:2;grid-row:2}
@@ -73,9 +74,9 @@
   .learn h2{margin:0;font:700 22px var(--disp)}
   .learn .sub{font-size:11px;color:var(--mist);margin-top:4px}
   .chart{display:grid;grid-template-columns:repeat(var(--cols,5),1fr);gap:8px}
-  .tile{min-width:0;background:var(--washi);color:#1A2138;border-radius:6px;padding:10px 4px 7px;text-align:center;cursor:pointer;border:2px solid transparent;position:relative;user-select:none;transition:transform .08s}
+  .tile{min-width:0;background:var(--washi);color:#1A2138;border-radius:6px;padding:12px 4px 8px;text-align:center;cursor:pointer;border:2px solid transparent;position:relative;user-select:none;transition:transform .08s}
   .tile:active{transform:scale(.95)}
-  .tile b{display:block;font:700 clamp(18px,6.5vw,30px)/1.25 var(--glyph);overflow:visible}
+  .tile b{display:block;font:700 clamp(18px,6.5vw,30px)/1.5 var(--glyph);overflow:visible}
   .tile i{display:block;font:400 11px var(--mono);color:#4a5170;margin-top:4px;font-style:normal}
   .tile.weak{border-color:var(--shu)}
   .tile.weak em{position:absolute;top:-8px;right:-6px;background:var(--shu);color:#fff;font:500 10px var(--mono);font-style:normal;border-radius:10px;padding:1px 6px}
@@ -89,7 +90,7 @@
   .missRow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:4px}
   .missRow[hidden]{display:none}
   .missLabel{font-size:11px;color:var(--mist)}
-  .missChip{background:var(--washi);color:#1A2138;border:1px solid var(--shu);border-radius:6px;padding:4px 8px;cursor:pointer;font:500 14px var(--glyph)}
+  .missChip{background:var(--washi);color:#1A2138;border:1px solid var(--shu);border-radius:6px;padding:4px 8px;cursor:pointer;font:500 14px/1.6 var(--glyph)}
   .missChip i{font:400 10px var(--mono);color:#4a5170;font-style:normal;margin-left:3px}
   .goal{display:block;font-size:11px;color:var(--gold)}
   .wordline{display:flex;gap:6px;justify-content:center;font:700 22px var(--glyph);min-height:26px}

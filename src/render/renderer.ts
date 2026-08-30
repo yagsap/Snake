@@ -57,10 +57,18 @@ function glyph(
   y: number,
   size: number,
   maxWidth?: number,
+  maxHeight?: number,
 ): void {
   const m = metricsFor(ctx, ch)
   let s = size
   if (maxWidth && m.width * s > maxWidth) s = maxWidth / m.width
+  // Clamp the ink HEIGHT too. Devanagari ascenders and descenders run well
+  // past the em box — width-only fitting let them spill out of every
+  // container we ever drew. Both clamps together make containment a
+  // guarantee of this function, not a hope about the font.
+  const inkH = m.asc + m.desc
+  if (maxHeight && inkH * s > maxHeight) s = maxHeight / inkH
+  if (s < 1) return
   ctx.textBaseline = 'alphabetic'
   ctx.font = `700 ${s}px ${FONTS.glyph}`
   ctx.fillText(ch, x, y + ((m.asc - m.desc) * s) / 2)
@@ -259,32 +267,25 @@ export class Renderer {
       const bob = Math.sin(this.clock * 1.9 + it.phase) * 1.6
       const x = it.x * CELL + CELL / 2
       const y = it.y * CELL + CELL / 2 + bob
-      const size = (CELL - 8) * scale
 
       if (it.correct) this.drawUrgency(x, y, world)
 
-      ctx.fillStyle = 'rgba(0,0,0,.35)'
-      roundRect(ctx, x - size / 2 + 2, y - size / 2 + 3, size, size, 6)
-      ctx.fill()
-
+      // No card behind the character: a box can be overflowed by a tall
+      // script (Devanagari ascenders escaped it on every phone font tried),
+      // but a bare glyph has nothing to escape. The shadow lifts it off the
+      // wave field, and dropping the card bought room for much bigger ink.
+      ctx.save()
+      ctx.shadowColor = 'rgba(0,0,0,.55)'
+      ctx.shadowBlur = 8
+      ctx.shadowOffsetY = 2
       ctx.fillStyle = THEME.washi
-      roundRect(ctx, x - size / 2, y - size / 2, size, size, 6)
-      ctx.fill()
-
-      ctx.strokeStyle = 'rgba(28,37,65,.18)'
-      ctx.lineWidth = 1
-      roundRect(ctx, x - size / 2 + 2.5, y - size / 2 + 2.5, size - 5, size - 5, 4)
-      ctx.stroke()
-
-      if (scale > 0.6) {
-        ctx.fillStyle = THEME.ink
-        if (world.reverse) {
-          // Reverse level: tiles show the SOUND; the cue shows the glyph.
-          glyph(ctx, world.soundOf(it.ch), x, y, CELL * 0.4 * scale, size * 0.86)
-        } else {
-          glyph(ctx, it.ch, x, y, CELL * 0.62 * scale, size * 0.82)
-        }
+      if (world.reverse) {
+        // Reverse level: tiles show the SOUND; the cue shows the glyph.
+        glyph(ctx, world.soundOf(it.ch), x, y, CELL * 0.42 * scale, CELL * 0.94, CELL * 0.94)
+      } else {
+        glyph(ctx, it.ch, x, y, CELL * 0.78 * scale, CELL * 0.94, CELL * 0.94)
       }
+      ctx.restore()
     }
   }
 
@@ -418,7 +419,7 @@ export class Renderer {
       const seg = snake[i]
       if (!seg?.ch) continue
       for (const m of mirrors(pts[i] as { x: number; y: number })) {
-        glyph(ctx, seg.ch, m.x, m.y, CELL * 0.5, CELL * 0.6)
+        glyph(ctx, seg.ch, m.x, m.y, CELL * 0.5, CELL * 0.6, CELL * 0.66)
       }
     }
 
