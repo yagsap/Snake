@@ -17,26 +17,29 @@ is fully offline on device. This guide is the path from this repo to the store.
 - Privacy policy page: https://yagsap.github.io/Snake/privacy.html
   (deployed with the site; App Store Connect requires this URL).
 
-## Step 0 — toolchain (one-time) ⚠️
+## Step 0 — toolchain (one-time) ⚠️ do this first
 
-Your Mac currently has **Xcode 15.4** and **macOS 14 (Sonoma)**. Two issues:
+Your Mac currently has **Xcode 15.4** on **macOS 14 (Sonoma)**. That cannot
+ship this app, for two independent reasons, both verified against Apple's and
+Capacitor's official docs (August 2026):
 
-1. **The iOS platform isn't downloaded** — Xcode was installed without it, so
-   nothing iOS can build yet.
-2. **App Store uploads require a newer SDK than Xcode 15.4 has.**
-   <!-- FACTCHECK: exact requirement + date filled in below -->
+1. **Since April 28, 2026, Apple only accepts uploads built with Xcode 26+**
+   (iOS 26 SDK) — Xcode 15/16 builds are rejected at upload.
+2. **Capacitor 8 itself requires Xcode 26+** to build.
 
-So, in order:
+Xcode 26 does not run on Sonoma. Your machine is an **M1 MacBook Air, which
+supports the latest macOS**, so the path is simply:
 
-1. **Update macOS** (System Settings → General → Software Update) to the
-   version required by current Xcode — see the requirements table below.
-2. **Update Xcode** from the Mac App Store (it is a large download).
-3. Open Xcode once and let it install its iOS platform when prompted
-   (or run `xcodebuild -downloadPlatform iOS`).
+1. **Update macOS** (System Settings → General → Software Update) — to
+   macOS Tahoe 26.2 or later (recommended: latest). Minimum viable is
+   Sequoia 15.6, which caps you at Xcode 26.0–26.3.
+2. **Install Xcode 26** from the Mac App Store (large download; the update
+   replaces 15.4).
+3. Open Xcode once — let it install its iOS platform + Simulator when it
+   asks (or run `xcodebuild -downloadPlatform iOS`).
 
-If you want to try the app in the Simulator *before* updating, Xcode 15.4 can
-do that much: Xcode → Settings → Platforms → get iOS — but you cannot submit
-from 15.4, so updating first is the better use of the download.
+Don't bother downloading the iOS platform for Xcode 15.4 in the meantime —
+it can't build a Capacitor 8 project, so that 7 GB would be wasted.
 
 ## Step 1 — run it locally
 
@@ -133,5 +136,21 @@ The web deploy (GitHub Pages) and the app share `src/`; pushing to `main`
 updates the website automatically, while the app updates only when you
 archive and upload.
 
-## Requirements table (verified)
-<!-- FACTCHECK-TABLE: filled from live sources -->
+## Requirements table
+
+Verified 2026-08-31 against developer.apple.com and capacitorjs.com:
+
+| Requirement | Value | Source |
+|---|---|---|
+| SDK required for App Store uploads | Xcode 26+ / iOS 26 SDK, since **April 28, 2026** | developer.apple.com/news/upcoming-requirements |
+| macOS for Xcode 26.0–26.3 | Sequoia 15.6+ | developer.apple.com/support/xcode |
+| macOS for latest Xcode (26.4+) | Tahoe 26.2+ | developer.apple.com/support/xcode |
+| Capacitor 8 build requirement | Xcode 26.0+, SPM fully supported | capacitorjs.com "Updating to 8.0" |
+| iPhone screenshots | ONE 6.9-inch set suffices (1320×2868 portrait, up to 10 shots); smaller sizes auto-scale from it | App Store Connect Help, screenshot specifications |
+| Privacy policy URL | Mandatory for every app, even with zero data collection | developer.apple.com/app-store/app-privacy-details |
+| App Privacy questionnaire | Answer "No, we do not collect data" → done; on-device localStorage does not count as collection | App Store Connect Help, manage app privacy |
+| Export compliance | Pre-answered via `ITSAppUsesNonExemptEncryption=NO` in Info.plist | already configured |
+
+A note on review: apps built with the iOS 26 SDK adopt Apple's current native
+UI appearance by default — irrelevant here, since the game draws its own UI
+inside the webview.
