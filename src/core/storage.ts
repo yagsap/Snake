@@ -23,10 +23,19 @@ export interface CharStat {
   err: number
 }
 
+export interface LevelState {
+  cleared: boolean
+  perfect: boolean
+}
+
 export interface SaveData {
   stats: Record<string, CharStat>
   bestScore: number
   bestEaten: number
+  /** Campaign progress by level id. */
+  campaign: Record<string, LevelState>
+  /** Best daily-challenge result, for today only. */
+  daily: { date: string; best: number } | null
   lang: LangId
   setName: string
   mode: ModeId
@@ -41,6 +50,8 @@ const defaults = (): SaveData => ({
   stats: {},
   bestScore: 0,
   bestEaten: 0,
+  campaign: {},
+  daily: null,
   lang: 'ja',
   setName: 'hiragana',
   mode: 'drift',
@@ -64,6 +75,24 @@ function parseStats(raw: unknown): Record<string, CharStat> {
     out[ch] = { ok: Math.max(0, num(v['ok'])), err: Math.max(0, num(v['err'])) }
   }
   return out
+}
+
+function parseCampaign(raw: unknown): Record<string, LevelState> {
+  const out: Record<string, LevelState> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== 'object') continue
+    const o = v as Record<string, unknown>
+    out[id] = { cleared: bool(o['cleared'], false), perfect: bool(o['perfect'], false) }
+  }
+  return out
+}
+
+function parseDaily(raw: unknown): SaveData['daily'] {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (typeof o['date'] !== 'string') return null
+  return { date: o['date'], best: Math.max(0, num(o['best'])) }
 }
 
 function parseVoices(raw: unknown): Record<string, string> {
@@ -94,6 +123,8 @@ export function load(): SaveData {
     // v1 stored the eaten count under `best`; carry it forward rather than
     // silently resetting a returning player's record to zero.
     bestEaten: Math.max(0, num(d['bestEaten'], num(d['best']))),
+    campaign: parseCampaign(d['campaign']),
+    daily: parseDaily(d['daily']),
     lang: isLangId(d['lang']) ? d['lang'] : base.lang,
     setName: typeof d['setName'] === 'string' ? d['setName'] : base.setName,
     mode: isModeId(d['mode']) ? d['mode'] : base.mode,

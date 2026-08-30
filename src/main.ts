@@ -5,21 +5,40 @@
  * draws, views render DOM, and this file is the one place that knows about
  * all of them. The scene stack decides who updates and who draws each frame;
  * the fixed-timestep loop decides when.
+ *
+ * A "run" is one configured game: endless (mode pills), a campaign level, or
+ * the daily seeded challenge. All three flow through the same play scene with
+ * a RunConfig — levels are data, not code paths.
  */
 import { FIXED_DT, GameLoop } from './core/loop'
 import { bindInput, DIR_VECTORS, type Dir } from './core/input'
 import { SceneStack, type Scene } from './core/scene'
 import { load, save, saveNow, type SaveData } from './core/storage'
 import { buildTable, LANGUAGES, setNamesFor, type CharTable } from './data/scripts'
-import { JUICE, THEME } from './game/config'
-import { MODES } from './game/modes'
+import { CELL, JUICE, THEME } from './game/config'
+import {
+  CAMPAIGNS,
+  dailySeed,
+  dateKey,
+  layoutCells,
+  tableFromChars,
+  type LevelSpec,
+  type WordEntry,
+} from './game/levels'
+import { MODES, type Mode } from './game/modes'
 import { comboMultiplier } from './game/progression'
 import { World } from './game/world'
 import { Renderer } from './render/renderer'
 import { HitStop } from './render/camera'
 import { Speech, Tones } from './ui/audio'
 import { Hud } from './ui/hud'
-import { ChartView, GameOverView, MenuView } from './ui/menus'
+import {
+  CampaignView,
+  ChartView,
+  GameOverView,
+  LevelEndView,
+  MenuView,
+} from './ui/menus'
 import { haptic, initNativeChrome } from './ui/native'
 
 const data: SaveData = load()
@@ -39,37 +58,154 @@ let world: World | null = null
 const playScr = document.getElementById('playScr') as HTMLElement
 const pauseBtn = document.getElementById('pauseBtn') as HTMLElement
 
+// -------------------------------------------------------------------- runs --
+
+interface RunConfig {
+  table: CharTable
+  mode: Mode
+  words: readonly WordEntry[] | null
+  reverse: boolean
+  /** Voice-only cue: never show the romanization in the seal. */
+  earOnly: boolean
+  obstacles: ReadonlySet<number> | null
+  level: LevelSpec | null
+  levelIndex: number
+  daily: boolean
+  seed?: number
+}
+
+/** The run currently being played (or last played, for retry). */
+let run: RunConfig | null = null
+
+function endlessRun(): RunConfig {
+  return {
+    table: buildTable(data.lang, data.setName),
+    mode: MODES[data.mode],
+    words: null,
+    reverse: false,
+    earOnly: false,
+    obstacles: null,
+    level: null,
+    levelIndex: -1,
+    daily: false,
+  }
+}
+
+function dailyRun(): RunConfig {
+  return {
+    ...endlessRun(),
+    table: buildTable(data.lang, data.setName),
+    mode: MODES.drift,
+    daily: true,
+    seed: dailySeed(),
+  }
+}
+
+/** Levels reuse the Mode shape — rules are rules, endless or campaign. */
+function levelMode(level: LevelSpec): Mode {
+  return {
+    id: 'drift', // id is only used by endless persistence; harmless here
+    label: level.title,
+    blurb: '',
+    wrap: level.wrap,
+    paceScale: level.paceScale,
+    scoreScale: level.kind === 'gauntlet' ? 1.5 : 1,
+  }
+}
+
+function levelRun(level: LevelSpec, index: number): RunConfig {
+  return {
+    table: tableFromChars(data.lang, level.chars),
+    mode: levelMode(level),
+    words: level.words ?? null,
+    reverse: level.kind === 'reverse',
+    earOnly: level.kind === 'ear',
+    obstacles: level.layout ? layoutCells(level.layout) : null,
+    level,
+    levelIndex: index,
+    daily: false,
+  }
+}
+
+const goalText = (r: RunConfig, w: World): string => {
+  if (!r.level) return ''
+  const done = r.words ? w.wordsDone : w.eaten
+  return `${done}/${r.level.goal.count} · miss ${w.mistakes}/${r.level.goal.maxMisses}`
+}
+
 // ------------------------------------------------------------------ scenes --
 
 /**
  * The running game. Owns the world's event subscriptions for its lifetime —
- * they are created in enter() and disposed in exit(), so a quit run cannot
- * leave handlers firing into dead UI.
+ * created in enter(), disposed in exit(), so a quit run cannot leave handlers
+ * firing into dead UI.
  */
-function makePlayScene(): Scene {
+function makePlayScene(r: RunConfig): Scene {
   const disposers: Array<() => void> = []
 
   return {
     name: 'play',
     enter() {
+      run = r
       playScr.hidden = false
       pauseBtn.textContent = '‖ pause'
       hud.reset()
+      hud.setCueGlyph(r.reverse)
+      hud.setWord(null, 0)
       renderer.reset()
       hitStop.clear()
+      tones.warmup() // we are inside the click that started the run
+      speech.warmup()
 
-      const w = new World({ table, stats: data.stats, mode: MODES[data.mode] })
+      const w = new World({
+        table: r.table,
+        stats: data.stats,
+        mode: r.mode,
+        ...(r.words ? { words: r.words } : {}),
+        ...(r.obstacles ? { obstacles: r.obstacles } : {}),
+        reverse: r.reverse,
+        ...(r.seed !== undefined ? { seed: r.seed } : {}),
+      })
       world = w
-      // Subscriptions land before reset(): reset emits the first 'spawned',
-      // and the opening cue must not be lost.
 
+      const showCue = (target: string, sound: string) => {
+        if (r.reverse) {
+          // The glyph IS the question; speaking it would answer a tile.
+          hud.setCue(target)
+        } else if (r.earOnly) {
+          hud.setCue(speech.current ? '♪' : sound)
+          speech.speak(target)
+        } else {
+          hud.setCue(data.showRomaji || !speech.current ? sound : '♪')
+          speech.speak(target)
+        }
+        hud.pulseSeal()
+      }
+
+      // Subscriptions land before reset(): reset emits the first 'spawned'.
       disposers.push(
         w.events.on('spawned', ({ target, sound }) => {
-          // If no voice resolved, the sound MUST be shown — a mute '♪' would
-          // make the target unknowable.
-          hud.setCue(data.showRomaji || !speech.current ? sound : '♪')
-          hud.pulseSeal()
-          speech.speak(target)
+          showCue(target, sound)
+          if (r.words && w.word) hud.setWord(w.word.w, 0)
+          hud.setGoal(goalText(r, w))
+        }),
+
+        w.events.on('wordProgress', ({ entry, index }) => {
+          hud.setWord(entry.w, index)
+        }),
+
+        w.events.on('wordDone', ({ entry }) => {
+          hud.setWord(entry.w, entry.w.length)
+          const head = w.snake[0]
+          if (head) {
+            const cx = head.x * CELL + CELL / 2
+            const cy = head.y * CELL + CELL / 2
+            renderer.fx.text(cx, cy - 26, entry.gloss, THEME.gold, 1.4, 20)
+          }
+          renderer.flash.fire(THEME.jade, 0.1)
+          if (r.level && w.wordsDone >= r.level.goal.count) {
+            finishLevel(r, w, true)
+          }
         }),
 
         w.events.on('eat', ({ item, award, streak, score }) => {
@@ -79,6 +215,7 @@ function makePlayScene(): Scene {
 
           hud.setScore(score)
           hud.setStreak(streak)
+          hud.setGoal(goalText(r, w))
           renderer.popEat()
           renderer.camera.addTrauma(JUICE.traumaOnEat)
           const v = DIR_VECTORS[w.input.current]
@@ -97,11 +234,16 @@ function makePlayScene(): Scene {
             haptic.eat()
             tones.eat(streak)
           }
+          // Chapter-style goals count correct eats.
+          if (r.level && !r.words && w.eaten >= r.level.goal.count) {
+            finishLevel(r, w, true)
+          }
         }),
 
         w.events.on('wrong', ({ item, target, targetSound }) => {
           const c = renderer.centerOf(item)
           hud.setStreak(0)
+          hud.setGoal(goalText(r, w))
           renderer.popWrong()
           renderer.camera.addTrauma(JUICE.traumaOnWrong)
           renderer.flash.fire(THEME.shu, 0.18)
@@ -111,18 +253,21 @@ function makePlayScene(): Scene {
           const v = DIR_VECTORS[w.input.current]
           renderer.fx.ring(c.x, c.y, THEME.shu, JUICE.wrongRingLife)
           renderer.fx.burst(c.x, c.y, THEME.shuSoft, 8, 200, v.x, v.y)
-          // The teaching moment: what you bit, and what you should have bitten.
+          // The teaching moment: what you bit, and what was wanted.
           renderer.fx.text(
             c.x, c.y,
-            `${item.ch} ${table[item.ch] ?? ''}`,
+            `${item.ch} ${r.table[item.ch] ?? ''}`,
             THEME.shu, JUICE.correctionLife,
           )
-          if (target) {
+          if (target && !r.words) {
             renderer.fx.text(
               c.x, c.y + 24,
               `wanted ${target} ${targetSound}`,
               THEME.washi, JUICE.correctionLife, 13,
             )
+          }
+          if (r.level && w.mistakes > r.level.goal.maxMisses) {
+            finishLevel(r, w, false)
           }
         }),
 
@@ -133,21 +278,35 @@ function makePlayScene(): Scene {
           haptic.death()
           tones.death()
 
+          if (r.level) {
+            // Crashing before the goal fails the level, after a beat.
+            const timer = setTimeout(() => {
+              if (world === w && scenes.has('play') && !scenes.has('levelend')) {
+                finishLevel(r, w, false)
+              }
+            }, 700)
+            disposers.push(() => clearTimeout(timer))
+            return
+          }
+
           const isRecord = score > data.bestScore
           data.bestScore = Math.max(data.bestScore, score)
           data.bestEaten = Math.max(data.bestEaten, eaten)
+          if (r.daily) {
+            const today = dateKey()
+            if (!data.daily || data.daily.date !== today || score > data.daily.best) {
+              data.daily = { date: today, best: score }
+            }
+          }
           save(data)
 
-          // Let the death sink in before the card: the crash the player just
-          // made is information, and covering it instantly hides the lesson.
-          // The timer is owned by this scene (cleared on exit) and checks
-          // world identity, so quit/restart inside the window can't race it,
-          // and an overlay pushed meanwhile is popped rather than orphaning
-          // the card.
+          // Let the death sink in before the card. The timer is owned by this
+          // scene (cleared on exit) and checks world identity, so quit or
+          // restart inside the window cannot race it.
           const timer = setTimeout(() => {
             if (world !== w || !scenes.has('play') || scenes.has('gameover')) return
             while (scenes.top && scenes.top.name !== 'play') scenes.pop()
-            scenes.push(makeGameOverScene(isRecord))
+            scenes.push(makeGameOverScene(isRecord, r))
           }, 700)
           disposers.push(() => clearTimeout(timer))
         }),
@@ -161,6 +320,9 @@ function makePlayScene(): Scene {
     exit() {
       for (const d of disposers) d()
       world = null
+      hud.setGoal('')
+      hud.setWord(null, 0)
+      hud.setCueGlyph(false)
       playScr.hidden = true
     },
 
@@ -175,16 +337,31 @@ function makePlayScene(): Scene {
       renderer.update(dt)
       renderer.draw(world, world.renderAlpha(alpha * FIXED_DT), {
         paused: scenes.has('pause'),
-        dimmed: scenes.has('gameover'),
+        dimmed: scenes.has('gameover') || scenes.has('levelend'),
       })
     },
   }
 }
 
+/** Level completion/failure: record progress and bring up the card. */
+function finishLevel(r: RunConfig, w: World, cleared: boolean): void {
+  if (!r.level || scenes.has('levelend')) return
+  const perfect = cleared && w.mistakes === 0
+  if (cleared) {
+    const prev = data.campaign[r.level.id]
+    data.campaign[r.level.id] = {
+      cleared: true,
+      perfect: perfect || prev?.perfect === true,
+    }
+    save(data)
+  }
+  while (scenes.top && scenes.top.name !== 'play') scenes.pop()
+  scenes.push(makeLevelEndScene(r, w, cleared, perfect))
+}
+
 /**
- * Pause overlay. It draws nothing itself — the play scene below keeps drawing
- * (drawsBelow) and adds the veil when it sees this scene on the stack. One
- * draw per frame instead of two.
+ * Pause overlay. Draws nothing itself — the play scene below keeps drawing
+ * (drawsBelow) and adds the veil when it sees this scene on the stack.
  */
 function makePauseScene(): Scene {
   return {
@@ -200,13 +377,12 @@ function makePauseScene(): Scene {
   }
 }
 
-/** The study chart, over either the menu or a paused game. */
-function makeChartScene(): Scene {
+function makeChartScene(chartTable: CharTable): Scene {
   return {
     name: 'chart',
     drawsBelow: true,
     enter() {
-      chartView.open(data, table)
+      chartView.open(data, chartTable)
     },
     exit() {
       chartView.close()
@@ -215,18 +391,17 @@ function makeChartScene(): Scene {
   }
 }
 
-function makeGameOverScene(isRecord: boolean): Scene {
+function makeGameOverScene(isRecord: boolean, r: RunConfig): Scene {
   return {
     name: 'gameover',
-    drawsBelow: true, // the final board stays visible, dimmed, behind the card
+    drawsBelow: true,
     enter() {
       const w = world
       if (!w) return
-      // Characters missed this run, worst-first — the review row.
       const missed = [...w.runErrors.entries()]
-        .filter(([ch]) => ch in table)
+        .filter(([ch]) => ch in r.table)
         .sort((a, b) => b[1] - a[1])
-        .map(([ch]) => ({ ch, sound: table[ch] ?? '' }))
+        .map(([ch]) => ({ ch, sound: r.table[ch] ?? '' }))
       gameOverView.show({
         score: w.score,
         eaten: w.eaten,
@@ -242,16 +417,67 @@ function makeGameOverScene(isRecord: boolean): Scene {
   }
 }
 
+function makeLevelEndScene(
+  r: RunConfig,
+  w: World,
+  cleared: boolean,
+  perfect: boolean,
+): Scene {
+  return {
+    name: 'levelend',
+    drawsBelow: true,
+    enter() {
+      const levels = CAMPAIGNS[data.lang]
+      levelEndView.show({
+        cleared,
+        perfect,
+        levelTitle: r.level?.title ?? '',
+        detail: cleared
+          ? `${w.score} points · ${w.mistakes} ${w.mistakes === 1 ? 'miss' : 'misses'}`
+          : w.alive
+            ? 'too many misses — study the chart and try again'
+            : 'crashed — steady does it',
+        hasNext: r.levelIndex >= 0 && r.levelIndex + 1 < levels.length,
+      })
+    },
+    exit() {
+      levelEndView.hide()
+    },
+  }
+}
+
+function makeCampaignScene(): Scene {
+  return {
+    name: 'campaign',
+    drawsBelow: true,
+    enter() {
+      campaignView.open(data)
+    },
+    exit() {
+      campaignView.close()
+    },
+  }
+}
+
 function makeMenuScene(message?: string): Scene {
   return {
     name: 'menu',
     enter() {
-      menuView.show(data, message)
+      menuView.show(data, message ?? menuResultLine())
     },
     exit() {
       menuView.hide()
     },
   }
+}
+
+function menuResultLine(): string {
+  const parts: string[] = []
+  if (data.bestScore) parts.push(`best ${data.bestScore}`)
+  if (data.daily && data.daily.date === dateKey()) {
+    parts.push(`daily ${data.daily.best}`)
+  }
+  return parts.join(' · ')
 }
 
 // ------------------------------------------------------------------- views --
@@ -262,6 +488,7 @@ const menuView = new MenuView({
     data.setName = setNamesFor(lang)[0] ?? ''
     table = buildTable(data.lang, data.setName)
     speech.setLanguage(lang)
+    speech.warmup()
     syncVoices()
     save(data)
     menuView.render(data)
@@ -277,11 +504,49 @@ const menuView = new MenuView({
     save(data)
     menuView.render(data)
   },
-  onPlay: startRun,
+  onPlay() {
+    scenes.replaceAll(makePlayScene(endlessRun()))
+  },
+  onCampaign() {
+    scenes.push(makeCampaignScene())
+  },
+  onDaily() {
+    scenes.replaceAll(makePlayScene(dailyRun()))
+  },
   onLearn() {
-    scenes.push(makeChartScene())
+    scenes.push(makeChartScene(table))
   },
 })
+
+const campaignView = new CampaignView(
+  (level, index) => {
+    scenes.replaceAll(makePlayScene(levelRun(level, index)))
+  },
+  () => {
+    if (scenes.top?.name === 'campaign') scenes.pop()
+  },
+)
+
+const levelEndView = new LevelEndView(
+  () => {
+    // Next level
+    const levels = CAMPAIGNS[data.lang]
+    const next = run ? levels[run.levelIndex + 1] : undefined
+    if (next && run) {
+      scenes.replaceAll(makePlayScene(levelRun(next, run.levelIndex + 1)))
+    }
+  },
+  () => {
+    // Retry / replay
+    if (run?.level) {
+      scenes.replaceAll(makePlayScene(levelRun(run.level, run.levelIndex)))
+    }
+  },
+  () => {
+    scenes.replaceAll(makeMenuScene())
+    scenes.push(makeCampaignScene())
+  },
+)
 
 const chartView = new ChartView({
   onSpeak: (ch) => speech.speak(ch),
@@ -297,20 +562,21 @@ const chartView = new ChartView({
     }
     save(data)
     if (scenes.top?.name === 'chart') {
-      chartView.open(data, table) // re-render with cleared stats
+      chartView.open(data, run && scenes.has('play') ? run.table : table)
     }
   },
   onVoice(name) {
     speech.choose(name)
+    speech.warmup()
     save(data)
     syncVoices()
-    if (world?.target) speech.speak(world.target)
+    if (world?.target && !run?.reverse) speech.speak(world.target)
   },
   onShowRomaji(show) {
     data.showRomaji = show
     hud.setSealHidden(!show && !!speech.current)
-    if (world?.target) {
-      hud.setCue(show || !speech.current ? (table[world.target] ?? '—') : '♪')
+    if (world?.target && run && !run.reverse && !run.earOnly) {
+      hud.setCue(show || !speech.current ? (run.table[world.target] ?? '—') : '♪')
     }
     save(data)
   },
@@ -323,8 +589,7 @@ const chartView = new ChartView({
 
 const gameOverView = new GameOverView(
   () => {
-    // Again: tear the whole stack down and start a fresh run.
-    scenes.replaceAll(makePlayScene())
+    if (run) scenes.replaceAll(makePlayScene(run.daily ? dailyRun() : endlessRun()))
   },
   () => {
     scenes.replaceAll(makeMenuScene(runSummary()))
@@ -333,15 +598,11 @@ const gameOverView = new GameOverView(
 )
 
 function runSummary(): string | undefined {
-  return world ? `run: ${world.score} · best ${data.bestScore}` : undefined
+  return world ? `run: ${world.score} · ${menuResultLine()}` : undefined
 }
 
 function syncVoices(): void {
   chartView.setVoices(speech.voices, speech.current, LANGUAGES[data.lang].name)
-}
-
-function startRun(): void {
-  scenes.replaceAll(makePlayScene())
 }
 
 // ------------------------------------------------------------------- input --
@@ -355,25 +616,25 @@ bindInput(canvas, {
     switch (action) {
       case 'replay-cue':
       case 'tap':
-        if ((top === 'play' || top === 'pause') && world?.target) {
+        if ((top === 'play' || top === 'pause') && world?.target && !run?.reverse) {
           hud.pulseSeal()
-          speech.speak(world.target)
+          speech.speak(run?.words && world.word ? world.word.w : world.target)
         }
         break
       case 'pause':
         // Never pause a dead world: the death timeout is about to bring up
-        // the game-over card, and a pause pushed in that window would orphan it.
+        // its card, and a pause pushed in that window would orphan it.
         if (top === 'play' && world?.alive) scenes.push(makePauseScene())
         else if (top === 'pause') scenes.pop()
         break
       case 'learn':
         if (top === 'chart') scenes.pop()
         else if (top === 'pause' || top === 'menu' || (top === 'play' && world?.alive)) {
-          scenes.push(makeChartScene())
+          scenes.push(makeChartScene(run && scenes.has('play') ? run.table : table))
         }
         break
       case 'escape':
-        if (top === 'chart' || top === 'pause') scenes.pop()
+        if (top === 'chart' || top === 'pause' || top === 'campaign') scenes.pop()
         else if (top === 'play' && world?.alive) scenes.push(makePauseScene())
         break
     }
@@ -381,7 +642,7 @@ bindInput(canvas, {
   isBlocked: () => {
     // 'pause' stays unblocked so space/tap can replay the cue — a paused
     // screen is exactly where a learner studies the sound. Turns are still
-    // gated per-action above (onTurn checks the top scene is 'play').
+    // gated per-action above.
     const top = scenes.top?.name
     return top !== 'play' && top !== 'pause'
   },
@@ -394,19 +655,22 @@ document.getElementById('pauseBtn')?.addEventListener('click', () => {
 })
 
 document.getElementById('quitBtn')?.addEventListener('click', () => {
+  if (!scenes.has('play')) return
+  const fromLevel = !!run?.level
   const summary = runSummary()
-  if (scenes.has('play')) scenes.replaceAll(makeMenuScene(summary))
+  scenes.replaceAll(makeMenuScene(fromLevel ? undefined : summary))
+  if (fromLevel) scenes.push(makeCampaignScene())
 })
 
 document.getElementById('seal')?.addEventListener('click', () => {
-  if (world?.target) {
+  if (world?.target && !run?.reverse) {
     hud.pulseSeal()
-    speech.speak(world.target)
+    speech.speak(run?.words && world.word ? world.word.w : world.target)
   }
 })
 
 // Auto-pause when the tab loses focus. A game the player is not looking at
-// must not keep killing them; this was the prototype's worst timing bug.
+// must not keep killing them.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     if (scenes.top?.name === 'play' && world?.alive) scenes.push(makePauseScene())
@@ -416,6 +680,11 @@ document.addEventListener('visibilitychange', () => {
 addEventListener('pagehide', () => saveNow(data))
 
 speech.onVoicesChanged = syncVoices
+
+// Prime the TTS engine on the first gesture anywhere, so the voice loads
+// while the player is still reading the menu — not mid-run on the first cue.
+addEventListener('pointerdown', () => speech.warmup(), { once: true, capture: true })
+addEventListener('keydown', () => speech.warmup(), { once: true, capture: true })
 
 // -------------------------------------------------------------------- loop --
 
@@ -440,6 +709,6 @@ loop.start()
 // world. Stripped from production builds — import.meta.env.DEV is compile-time.
 if (import.meta.env.DEV) {
   Object.defineProperty(window, '__snake', {
-    get: () => ({ world, scenes, data }),
+    get: () => ({ world, scenes, data, run }),
   })
 }

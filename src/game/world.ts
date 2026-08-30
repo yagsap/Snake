@@ -7,6 +7,8 @@ import { BOARD, SNAKE, SPAWN } from './config'
 import type { Mode } from './modes'
 import { awardFor, moveInterval, type Award } from './progression'
 import { chooseDistractors, chooseTarget, freeCells } from './spawn'
+import { confusablesOf } from '../data/scripts'
+import type { WordEntry } from './levels'
 
 export interface Segment {
   x: number
@@ -39,6 +41,10 @@ export type WorldEvents = {
   death: { reason: DeathReason; score: number; eaten: number }
   /** Emitted after every committed move, for step-locked effects. */
   moved: { grew: boolean }
+  /** A word level advanced one character (the word is not finished yet). */
+  wordProgress: { entry: WordEntry; index: number }
+  /** A whole word was completed. */
+  wordDone: { entry: WordEntry }
 }
 
 export interface WorldOptions {
@@ -46,6 +52,12 @@ export interface WorldOptions {
   stats: Record<string, CharStat>
   mode: Mode
   seed?: number
+  /** Word-level mode: cues are whole words, eaten character by character. */
+  words?: readonly WordEntry[]
+  /** Lethal stone cells (cell index = y * cells + x). */
+  obstacles?: ReadonlySet<number>
+  /** Presentation hint only — the simulation never branches on it. */
+  reverse?: boolean
 }
 
 const idx = (x: number, y: number): number => y * BOARD.cells + x
@@ -78,6 +90,16 @@ export class World {
   /** Characters missed in THIS run (not all-time), for the end-of-run review. */
   readonly runErrors = new Map<string, number>()
 
+  /** Word-level state. `target` always holds the currently-needed character. */
+  word: WordEntry | null = null
+  wordIndex = 0
+  wordsDone = 0
+  private lastWord: string | null = null
+  private readonly words: readonly WordEntry[] | null
+
+  readonly obstacles: ReadonlySet<number>
+  readonly reverse: boolean
+
   alive = true
   interval: number
   /** Time accumulated toward the next move. Also the render interpolation phase. */
@@ -88,9 +110,19 @@ export class World {
     this.table = opts.table
     this.stats = opts.stats
     this.mode = opts.mode
+    this.words = opts.words?.length ? opts.words : null
+    this.reverse = opts.reverse ?? false
     this.rng = new Rng(opts.seed)
     this.input = new DirectionBuffer('right')
     this.interval = moveInterval(0, this.mode)
+    // Defensive: never let an authored layout bury the spawn row. Layouts are
+    // supposed to keep it clear; if one slips, the snake wins over the stone.
+    const obstacles = new Set(opts.obstacles ?? [])
+    const mid = Math.floor(BOARD.cells / 2)
+    for (let x = mid - SNAKE.startLength; x <= mid + 1; x++) {
+      obstacles.delete(mid * BOARD.cells + x)
+    }
+    this.obstacles = obstacles
     // No spawn here: reset() emits 'spawned', and the caller has not had a
     // chance to subscribe yet. The owner calls reset() once listeners exist.
   }
@@ -124,8 +156,17 @@ export class World {
     this.alive = true
     this.moveClock = 0
     this.lastTarget = null
+    this.word = null
+    this.wordIndex = 0
+    this.wordsDone = 0
+    this.lastWord = null
     this.interval = moveInterval(0, this.mode)
     this.spawn()
+  }
+
+  /** Romanization of a character, for presentation layers. */
+  soundOf(ch: string): string {
+    return this.table[ch] ?? ''
   }
 
   turn(dir: Dir): boolean {
@@ -177,6 +218,11 @@ export class World {
       nx = (nx + BOARD.cells) % BOARD.cells
       ny = (ny + BOARD.cells) % BOARD.cells
     } else if (nx < 0 || ny < 0 || nx >= BOARD.cells || ny >= BOARD.cells) {
+      this.die('wall')
+      return
+    }
+
+    if (this.obstacles.has(idx(nx, ny))) {
       this.die('wall')
       return
     }
@@ -239,7 +285,27 @@ export class World {
       streak: this.streak,
       score: this.score,
     })
-    this.spawn()
+
+    if (this.word) {
+      this.wordIndex += 1
+      if (this.wordIndex >= this.word.w.length) {
+        const entry = this.word
+        this.wordsDone += 1
+        this.events.emit('wordDone', { entry })
+        this.spawn()
+      } else {
+        // The rest of the word is already on the board; just move the aim.
+        this.target = this.word.w[this.wordIndex] ?? null
+        this.targetAge = 0
+        for (const it of this.items) it.correct = it.ch === this.target
+        this.events.emit('wordProgress', {
+          entry: this.word,
+          index: this.wordIndex,
+        })
+      }
+    } else {
+      this.spawn()
+    }
   }
 
   private onWrong(item: Item, hitIndex: number): void {
@@ -328,7 +394,7 @@ export class World {
   }
 
   private occupied(): Set<number> {
-    const set = new Set<number>()
+    const set = new Set<number>(this.obstacles)
     for (const s of this.snake) set.add(idx(s.x, s.y))
     for (const i of this.items) set.add(idx(i.x, i.y))
     return set
@@ -341,8 +407,12 @@ export class World {
     return { x: cell % BOARD.cells, y: Math.floor(cell / BOARD.cells) }
   }
 
-  /** Pick a new target and lay it out with its distractors. */
+  /** Pick a new target (or word) and lay it out with its distractors. */
   private spawn(): void {
+    if (this.words) {
+      this.spawnWord()
+      return
+    }
     this.items = []
     this.targetAge = 0
 
@@ -377,6 +447,69 @@ export class World {
     this.events.emit('spawned', {
       target,
       sound: this.table[target] ?? '',
+    })
+  }
+
+  /**
+   * Lay out a whole word at once — every character of it, plus distractors —
+   * so the player plans a route through the word in order. Only the currently
+   * needed character is `correct`; the flags advance as the word does.
+   */
+  private spawnWord(): void {
+    if (!this.words) return
+    this.items = []
+    this.targetAge = 0
+
+    const pool = this.words.filter((e) => e.w !== this.lastWord)
+    const entry =
+      this.rng.pick(pool.length ? pool : this.words) ?? this.words[0]
+    if (!entry) return
+    this.word = entry
+    this.lastWord = entry.w
+    this.wordIndex = 0
+    const wordChars = [...entry.w]
+    this.target = wordChars[0] ?? null
+
+    // Distractors: lookalikes of any character in the word first, then
+    // fillers. Characters sharing a sound with any word character are
+    // excluded — they would read as a decoy syllable of the answer.
+    const wordSet = new Set(wordChars)
+    const wordSounds = new Set(wordChars.map((c) => this.table[c]))
+    const eligible = (c: string) =>
+      !wordSet.has(c) && !wordSounds.has(this.table[c])
+    const lookalikes: string[] = []
+    for (const ch of wordChars) {
+      for (const c of confusablesOf(ch)) {
+        if (c in this.table && eligible(c) && !lookalikes.includes(c)) {
+          lookalikes.push(c)
+        }
+      }
+    }
+    this.rng.shuffle(lookalikes)
+    const fillers = this.rng.shuffle(
+      Object.keys(this.table).filter(
+        (c) => eligible(c) && !lookalikes.includes(c),
+      ),
+    )
+    const distractors = [...lookalikes, ...fillers].slice(0, 3)
+
+    const free = this.spawnCells()
+    const wanted = [...wordChars, ...distractors]
+    for (let i = 0; i < wanted.length && i < free.length; i++) {
+      const cell = free[i] as number
+      this.items.push({
+        x: cell % BOARD.cells,
+        y: Math.floor(cell / BOARD.cells),
+        ch: wanted[i] as string,
+        correct: wanted[i] === this.target,
+        phase: this.rng.range(0, Math.PI * 2),
+        age: 0,
+      })
+    }
+
+    this.events.emit('spawned', {
+      target: entry.w,
+      sound: wordChars.map((c) => this.table[c] ?? '').join(''),
     })
   }
 }

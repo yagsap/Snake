@@ -15,6 +15,7 @@ const PREFERRED =
 export class Speech {
   private voice: SpeechSynthesisVoice | null = null
   private available: SpeechSynthesisVoice[] = []
+  private warmedVoice: string | null = null
 
   /** Called whenever the usable voice list changes, so the UI can re-render. */
   onVoicesChanged: (() => void) | null = null
@@ -72,6 +73,26 @@ export class Speech {
       null
   }
 
+  /**
+   * Prime the TTS engine with a silent utterance so the voice loads while the
+   * player is still in the menu. A cold engine loads the voice ~300ms after
+   * the first real cue and blocks the main thread for 130–280ms doing it —
+   * measured as two long frames early in the first run after a reboot, felt
+   * as the snake freezing. Warm engines stay warm, so this is once per voice.
+   * Must be called from within a user gesture: browsers refuse speech before
+   * one, exactly like audio.
+   */
+  warmup(): void {
+    const voice = this.voice
+    if (!voice || this.warmedVoice === voice.name) return
+    this.warmedVoice = voice.name
+    const u = new SpeechSynthesisUtterance(' ')
+    u.voice = voice
+    u.lang = voice.lang
+    u.volume = 0
+    speechSynthesis.speak(u)
+  }
+
   speak(text: string): void {
     if (!text) return
     if (!this.voice) {
@@ -79,16 +100,25 @@ export class Speech {
       nativeSpeak(text, this.lang)
       return
     }
-    speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(
-      // A trailing ideographic stop makes ja/zh voices read a bare character
-      // with sentence intonation instead of clipping it.
-      /^(ja|zh)/.test(this.voice.lang) ? `${text}。` : text,
-    )
-    u.voice = this.voice
-    u.lang = this.voice.lang
-    u.rate = 0.9
-    speechSynthesis.speak(u)
+    const voice = this.voice
+    // Deferred a tick: TTS engine startup is main-thread work on several
+    // platforms, and the frame it would otherwise share is the one drawing
+    // the eat feedback. One frame of cue latency is imperceptible; a hitch
+    // on the reward frame is not.
+    setTimeout(() => {
+      if (speechSynthesis.speaking || speechSynthesis.pending) {
+        speechSynthesis.cancel()
+      }
+      const u = new SpeechSynthesisUtterance(
+        // A trailing ideographic stop makes ja/zh voices read a bare character
+        // with sentence intonation instead of clipping it.
+        /^(ja|zh)/.test(voice.lang) ? `${text}。` : text,
+      )
+      u.voice = voice
+      u.lang = voice.lang
+      u.rate = 0.9
+      speechSynthesis.speak(u)
+    }, 0)
   }
 }
 
@@ -102,6 +132,15 @@ export class Speech {
 export class Tones {
   private ctx: AudioContext | null = null
   enabled = true
+
+  /**
+   * Create the context ahead of time, from a user gesture (the Play click).
+   * Creating it lazily on the first eat cost a measured ~100ms hitch on the
+   * exact frame the first reward landed.
+   */
+  warmup(): void {
+    this.ensure()
+  }
 
   private ensure(): AudioContext | null {
     if (!this.ctx) {

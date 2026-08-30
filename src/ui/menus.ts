@@ -1,4 +1,5 @@
 import type { SaveData } from '../core/storage'
+import { CAMPAIGNS, KIND_LABEL, type LevelSpec } from '../game/levels'
 import {
   LANGUAGES,
   LANG_IDS,
@@ -26,6 +27,8 @@ export interface MenuCallbacks {
   onSet(setName: string): void
   onMode(mode: ModeId): void
   onPlay(): void
+  onCampaign(): void
+  onDaily(): void
   onLearn(): void
 }
 
@@ -39,6 +42,8 @@ export class MenuView {
 
   constructor(private cb: MenuCallbacks) {
     $('playBtn').addEventListener('click', () => cb.onPlay())
+    $('campBtn').addEventListener('click', () => cb.onCampaign())
+    $('dailyBtn').addEventListener('click', () => cb.onDaily())
     $('menuLearnBtn').addEventListener('click', () => cb.onLearn())
   }
 
@@ -87,6 +92,91 @@ export class MenuView {
       btn.addEventListener('click', () => this.cb.onMode(btn.dataset.mode as ModeId))
     }
     $('modeBlurb').textContent = MODES[data.mode].blurb
+
+    const levels = CAMPAIGNS[data.lang]
+    const cleared = levels.filter((l) => data.campaign[l.id]?.cleared).length
+    $('campBtn').textContent =
+      cleared > 0 ? `Campaign · ${cleared}/${levels.length}` : 'Campaign'
+  }
+}
+
+// --------------------------------------------------------------- campaign --
+
+export class CampaignView {
+  private root = $('campScr')
+  private listEl = $('campList')
+
+  constructor(onPick: (level: LevelSpec, index: number) => void, onClose: () => void) {
+    $('campClose').addEventListener('click', onClose)
+    this.listEl.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-i]')
+      if (!btn || btn.classList.contains('locked')) return
+      const i = Number(btn.dataset.i)
+      const level = this.levels[i]
+      if (level) onPick(level, i)
+    })
+  }
+
+  private levels: LevelSpec[] = []
+
+  open(data: SaveData): void {
+    this.levels = CAMPAIGNS[data.lang]
+    $('campTitle').textContent = `${LANGUAGES[data.lang].name} campaign`
+    this.listEl.innerHTML = this.levels
+      .map((lvl, i) => {
+        const st = data.campaign[lvl.id]
+        const prev = i === 0 ? null : this.levels[i - 1]
+        const unlocked = i === 0 || (prev && data.campaign[prev.id]?.cleared)
+        const cls = !unlocked ? 'locked' : st?.perfect ? 'perfect' : st?.cleared ? 'cleared' : ''
+        const state = !unlocked ? '🔒' : st?.perfect ? '★' : st?.cleared ? '✓' : ''
+        return `<button class="lvl ${cls}" data-i="${i}">
+          <span class="num">${i + 1}</span>
+          <span class="meta"><b>${lvl.title}</b><i>${KIND_LABEL[lvl.kind]}</i></span>
+          <span class="state">${state}</span>
+        </button>`
+      })
+      .join('')
+    this.root.hidden = false
+  }
+
+  close(): void {
+    this.root.hidden = true
+  }
+}
+
+// -------------------------------------------------------------- level end --
+
+export interface LevelEndStats {
+  cleared: boolean
+  perfect: boolean
+  levelTitle: string
+  detail: string
+  hasNext: boolean
+}
+
+export class LevelEndView {
+  private root = $('lvlEndScr')
+
+  constructor(onNext: () => void, onRetry: () => void, onMenu: () => void) {
+    $('lvlNextBtn').addEventListener('click', onNext)
+    $('lvlRetryBtn').addEventListener('click', onRetry)
+    $('lvlMenuBtn').addEventListener('click', onMenu)
+  }
+
+  show(stats: LevelEndStats): void {
+    $('lvlEndTitle').textContent = stats.cleared
+      ? stats.perfect ? 'perfect clear' : 'level clear'
+      : 'level failed'
+    $('lvlEndTitle').classList.toggle('gold', stats.cleared && stats.perfect)
+    $('lvlEndName').textContent = stats.levelTitle
+    $('lvlEndDetail').textContent = stats.detail
+    $('lvlNextBtn').hidden = !(stats.cleared && stats.hasNext)
+    $('lvlRetryBtn').textContent = stats.cleared ? 'replay' : 'retry'
+    this.root.hidden = false
+  }
+
+  hide(): void {
+    this.root.hidden = true
   }
 }
 

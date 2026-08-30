@@ -23,6 +23,9 @@ export class Hud {
   private multEl = $('mult')
   private cueEl = $('cueText')
   private sealEl = $('seal')
+  private goalEl = $('goalLine')
+  private wordEl = $('wordLine')
+  private lastGoalText = ''
 
   private shownScore = 0
   private targetScore = 0
@@ -63,6 +66,38 @@ export class Hud {
 
   setCue(text: string): void {
     this.cueEl.textContent = text
+  }
+
+  /** Big-glyph styling for reverse levels, where the cue IS the character. */
+  setCueGlyph(on: boolean): void {
+    this.sealEl.classList.toggle('glyph-cue', on)
+  }
+
+  /** Level goal readout, e.g. "7/12 · miss 1/3". Empty string hides it. */
+  setGoal(text: string): void {
+    if (text === this.lastGoalText) return
+    this.lastGoalText = text
+    this.goalEl.textContent = text
+    this.goalEl.hidden = !text
+  }
+
+  /**
+   * Word-level progress strip: the word's characters with the eaten part
+   * highlighted. Data comes from our own tables, never user input.
+   */
+  setWord(word: string | null, index: number): void {
+    if (!word) {
+      this.wordEl.hidden = true
+      this.wordEl.innerHTML = ''
+      return
+    }
+    this.wordEl.hidden = false
+    this.wordEl.innerHTML = [...word]
+      .map((ch, i) => {
+        const cls = i < index ? 'done' : i === index ? 'now' : 'todo'
+        return `<span class="${cls}">${ch}</span>`
+      })
+      .join('')
   }
 
   /** Pulse the seal — visual confirmation that the cue just played. */

@@ -189,6 +189,7 @@ export class Renderer {
     ctx.textBaseline = 'middle'
 
     if (!world.mode.wrap) drawWalls(ctx, this.dangerNear(world))
+    this.drawObstacles(world)
     this.drawItems(world)
     this.drawSnake(world, alpha)
     this.fx.draw(ctx)
@@ -223,6 +224,31 @@ export class Renderer {
     return clamp01(1 - d / 3)
   }
 
+  /** Stones: lethal cells drawn as dark rocks so the rule is visible. */
+  private drawObstacles(world: World): void {
+    const ctx = this.ctx
+    for (const cell of world.obstacles) {
+      const x = (cell % BOARD.cells) * CELL
+      const y = Math.floor(cell / BOARD.cells) * CELL
+      const pad = 3
+      ctx.fillStyle = 'rgba(0,0,0,.4)'
+      roundRect(ctx, x + pad + 1.5, y + pad + 2.5, CELL - pad * 2, CELL - pad * 2, 7)
+      ctx.fill()
+      ctx.fillStyle = '#151B30'
+      roundRect(ctx, x + pad, y + pad, CELL - pad * 2, CELL - pad * 2, 7)
+      ctx.fill()
+      ctx.strokeStyle = THEME.grid
+      ctx.lineWidth = 1.5
+      roundRect(ctx, x + pad + 2, y + pad + 2, CELL - pad * 2 - 4, CELL - pad * 2 - 4, 5)
+      ctx.stroke()
+      // one moss fleck so a stone reads as a stone, not a hole
+      ctx.fillStyle = 'rgba(154,209,178,.28)'
+      ctx.beginPath()
+      ctx.arc(x + CELL * 0.32, y + CELL * 0.3, 1.6, 0, TWO_PI)
+      ctx.fill()
+    }
+  }
+
   private drawItems(world: World): void {
     const ctx = this.ctx
     for (const it of world.items) {
@@ -252,7 +278,12 @@ export class Renderer {
 
       if (scale > 0.6) {
         ctx.fillStyle = THEME.ink
-        glyph(ctx, it.ch, x, y, CELL * 0.62 * scale, size * 0.82)
+        if (world.reverse) {
+          // Reverse level: tiles show the SOUND; the cue shows the glyph.
+          glyph(ctx, world.soundOf(it.ch), x, y, CELL * 0.4 * scale, size * 0.86)
+        } else {
+          glyph(ctx, it.ch, x, y, CELL * 0.62 * scale, size * 0.82)
+        }
       }
     }
   }

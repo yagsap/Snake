@@ -57,8 +57,8 @@
   .seal small{position:absolute;bottom:2px;font:400 8px var(--mono);letter-spacing:.1em;color:var(--shu-soft)}
   .seal.hidden-cue{font-size:24px}
   canvas{width:100%;max-width:520px;aspect-ratio:1;background:var(--indigo);border:1px solid var(--grid);border-radius:8px;touch-action:none;display:block;box-shadow:0 18px 40px -20px rgba(0,0,0,.7)}
-  .pad{display:none;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,52px);gap:6px;margin:0 auto}
-  .pad button{background:var(--indigo-2);border:1px solid var(--grid);border-radius:6px;color:var(--washi);font-size:20px}
+  .pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,64px);gap:12px;margin:10px auto 0}
+  .pad button{background:var(--indigo-2);border:1px solid var(--grid);border-radius:10px;color:var(--washi);font-size:26px}
   .pad button:nth-child(1){grid-column:2}
   .pad button:nth-child(2){grid-column:1;grid-row:2}
   .pad button:nth-child(3){grid-column:2;grid-row:2}
@@ -91,6 +91,27 @@
   .missLabel{font-size:11px;color:var(--mist)}
   .missChip{background:var(--washi);color:#1A2138;border:1px solid var(--shu);border-radius:6px;padding:4px 8px;cursor:pointer;font:500 14px var(--glyph)}
   .missChip i{font:400 10px var(--mono);color:#4a5170;font-style:normal;margin-left:3px}
+  .goal{display:block;font-size:11px;color:var(--gold)}
+  .wordline{display:flex;gap:6px;justify-content:center;font:700 22px var(--glyph);min-height:26px}
+  .wordline span.done{color:var(--jade)}
+  .wordline span.now{color:var(--washi);border-bottom:2px solid var(--gold)}
+  .wordline span.todo{color:var(--mist);opacity:.55}
+  .seal.glyph-cue #cueText{font:700 30px var(--glyph)}
+  .camp-card{width:min(94vw,380px);max-height:82vh;display:flex;flex-direction:column}
+  .campTitle{margin:0;font:700 19px var(--disp)}
+  .camp-list{overflow:auto;display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  .lvl{display:flex;align-items:center;gap:10px;background:var(--indigo);border:2px solid transparent;border-radius:10px;padding:9px 12px;color:var(--washi);cursor:pointer;text-align:left;font-family:var(--mono)}
+  .lvl .num{font:700 15px var(--disp);color:var(--mist);min-width:22px}
+  .lvl .meta{flex:1;min-width:0}
+  .lvl .meta b{display:block;font:500 13px var(--mono)}
+  .lvl .meta i{font:400 10px var(--mono);color:var(--mist);font-style:normal;text-transform:uppercase;letter-spacing:.08em}
+  .lvl .state{font-size:14px;color:var(--jade)}
+  .lvl.cleared{border-color:var(--jade)}
+  .lvl.perfect{border-color:var(--gold)}
+  .lvl.perfect .state{color:var(--gold)}
+  .lvl.locked{opacity:.4;cursor:default}
+  .lvlEndName{font:500 13px var(--mono);color:var(--mist)}
+  .over-card h2.gold{color:var(--gold)}
 </style>
 </head>
 <body>
@@ -102,7 +123,11 @@
   <div class="pills" id="modeRow"></div>
   <div class="modeBlurb" id="modeBlurb"></div>
   <div class="result" id="resultLine"></div>
-  <button class="primary" id="playBtn">Play</button>
+  <button class="primary" id="campBtn">Campaign</button>
+  <div style="display:flex;gap:8px">
+    <button class="ghost" id="playBtn" style="flex:1">Endless</button>
+    <button class="ghost" id="dailyBtn" style="flex:1">Daily run</button>
+  </div>
   <button class="ghost" id="menuLearnBtn">Learn the characters</button>
   <p class="hint">swipe or arrows to steer · eat the character you hear · wrong bites cost a segment<br>answer fast for bonus points · <kbd>space</kbd> replays the sound</p>
 </div></div>
@@ -113,8 +138,10 @@
     <div class="score">
       <b id="score">0</b><span> · streak <b id="streak">0</b></span>
       <span class="mult" id="mult"></span>
+      <span class="goal" id="goalLine" hidden></span>
     </div>
   </div>
+  <div class="wordline" id="wordLine" hidden></div>
   <canvas id="c" aria-label="Game board"></canvas>
   <div class="under">
     <button class="ghost sm" id="pauseBtn">‖ pause</button>
@@ -133,6 +160,20 @@
   <div class="missRow" id="overMissed" hidden></div>
   <button class="primary" id="againBtn">Again</button>
   <button class="ghost" id="overMenuBtn">menu</button>
+</div></div>
+
+<div class="ov" id="campScr" hidden><div class="menu-card camp-card">
+  <div class="row"><h2 class="campTitle" id="campTitle">campaign</h2><button class="ghost sm" id="campClose">back</button></div>
+  <div class="camp-list" id="campList"></div>
+</div></div>
+
+<div class="ov" id="lvlEndScr" hidden><div class="over-card">
+  <h2 id="lvlEndTitle">level clear</h2>
+  <div class="lvlEndName" id="lvlEndName"></div>
+  <div class="overDetail" id="lvlEndDetail"></div>
+  <button class="primary" id="lvlNextBtn">Next level</button>
+  <button class="ghost" id="lvlRetryBtn">replay</button>
+  <button class="ghost" id="lvlMenuBtn">campaign</button>
 </div></div>
 
 <div class="learn" id="learn" role="dialog" aria-label="Character chart">
