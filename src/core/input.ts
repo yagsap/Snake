@@ -163,6 +163,14 @@ export function bindInput(
     activeId = e.pointerId
     startX = e.clientX
     startY = e.clientY
+    // Capture the pointer so the matching pointerup reaches this surface even
+    // when the finger lifts outside it — fast swipes routinely end off-canvas,
+    // and without capture those swipes were silently dropped.
+    try {
+      surface.setPointerCapture(e.pointerId)
+    } catch {
+      /* capture is best-effort */
+    }
   }
   const onPointerUp = (e: PointerEvent) => {
     if (e.pointerId !== activeId) return

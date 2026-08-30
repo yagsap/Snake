@@ -21,7 +21,10 @@ export const CELL = BOARD.size / BOARD.cells
 
 export const SNAKE = {
   startLength: 3,
-  /** Segments lost on a wrong bite. */
+  /**
+   * Segments popped on a wrong bite. The head advances that move, so the NET
+   * shrink is one less than this — 2 pops = the "costs a segment" in the hint.
+   */
   wrongBitePenalty: 2,
   /** Never shrink below this — otherwise a bad streak ends the run silently. */
   minLength: 2,
@@ -132,7 +135,7 @@ export const THEME = {
 /** Character-set-agnostic font stacks, mirrored from the stylesheet. */
 export const FONTS = {
   glyph:
-    "'Zen Kaku Gothic New','Noto Sans SC','Noto Sans Devanagari','Hiragino Sans','Noto Sans JP','Segoe UI',sans-serif",
+    "'Zen Kaku Gothic New','Noto Sans SC','Noto Sans Devanagari','Hiragino Sans','PingFang SC','Kohinoor Devanagari','Devanagari Sangam MN','Noto Sans JP','Segoe UI',sans-serif",
   display: "'Zen Old Mincho','Hiragino Mincho ProN',serif",
   mono: "'IBM Plex Mono',ui-monospace,monospace",
 } as const

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Script Snake</title>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+Devanagari:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -11,15 +11,16 @@
     --washi:#F1EDE3; --mist:#8A93AD;
     --jade:#9AD1B2; --jade-bright:#D7F0E0;
     --shu:#E63B2E; --shu-soft:#F4A79F; --gold:#E8C46A;
-    --glyph:'Zen Kaku Gothic New','Noto Sans SC','Noto Sans Devanagari','Hiragino Sans','Noto Sans JP','Segoe UI',sans-serif;
+    --glyph:'Zen Kaku Gothic New','Noto Sans SC','Noto Sans Devanagari','Hiragino Sans','PingFang SC','Kohinoor Devanagari','Devanagari Sangam MN','Noto Sans JP','Segoe UI',sans-serif;
     --disp:'Zen Old Mincho','Hiragino Mincho ProN',serif;
     --mono:'IBM Plex Mono',ui-monospace,monospace;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;background:var(--indigo);color:var(--washi);font-family:var(--mono);-webkit-tap-highlight-color:transparent}
-  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 12px 24px;gap:12px}
+  [hidden]{display:none!important}
+  html,body{margin:0;background:var(--indigo);color:var(--washi);font-family:var(--mono);-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(14px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
   .scr{width:100%;max-width:520px;display:flex;flex-direction:column;gap:12px}
-  .ov{position:fixed;inset:0;z-index:10;background:rgba(28,37,65,.86);backdrop-filter:blur(3px);display:grid;place-items:center;overflow:auto;padding:16px}
+  .ov{position:fixed;inset:0;z-index:10;background:rgba(28,37,65,.86);backdrop-filter:blur(3px);display:grid;place-items:center;overflow:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
   .ov[hidden]{display:none}
   .menu-card{width:min(92vw,340px);display:flex;flex-direction:column;gap:10px;background:var(--indigo-2);border:1px solid var(--grid);border-radius:14px;padding:18px 16px}
   h1{margin:0 0 2px;font:700 24px/1 var(--disp);letter-spacing:.02em;text-align:center}
@@ -65,7 +66,7 @@
   @media (pointer:coarse){.pad{display:grid}}
   kbd{border:1px solid var(--grid);border-radius:3px;padding:0 4px;font-family:inherit}
   .btn{background:transparent;border:1px solid var(--jade);border-radius:4px;color:var(--jade);font:500 12px var(--mono);padding:6px 10px;cursor:pointer}
-  .learn{position:fixed;inset:0;z-index:20;display:none;background:rgba(28,37,65,.92);backdrop-filter:blur(3px);overflow:auto;padding:18px 12px 40px}
+  .learn{position:fixed;inset:0;z-index:20;display:none;background:rgba(28,37,65,.92);backdrop-filter:blur(3px);overflow:auto;padding:calc(18px + env(safe-area-inset-top,0px)) 12px calc(40px + env(safe-area-inset-bottom,0px))}
   .learn.show{display:block}
   .learn .inner{max-width:520px;margin:0 auto}
   .learn .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}

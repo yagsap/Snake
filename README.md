@@ -14,6 +14,16 @@ npm run dev        # dev server
 npm run build      # typecheck + production build to dist/
 ```
 
+Pushing to `main` deploys the web build to GitHub Pages via Actions.
+
+## iOS app
+
+The same build ships as an iOS app through a Capacitor 8 shell in `ios/`
+(SPM, no CocoaPods). After any web change: `npm run build && npx cap sync ios`,
+then open `ios/App/App.xcodeproj`. Native additions (haptics, TTS fallback,
+status bar) live in [src/ui/native.ts](src/ui/native.ts) and no-op on the web.
+The full store-submission walkthrough is in [SHIP-IOS.md](SHIP-IOS.md).
+
 ## Architecture
 
 The project is deliberately structured to demonstrate core game-development

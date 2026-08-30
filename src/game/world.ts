@@ -3,7 +3,7 @@ import { DirectionBuffer, DIR_VECTORS, type Dir } from '../core/input'
 import { Rng } from '../core/rng'
 import type { CharStat } from '../core/storage'
 import type { CharTable } from '../data/scripts'
-import { BOARD, SNAKE } from './config'
+import { BOARD, SNAKE, SPAWN } from './config'
 import type { Mode } from './modes'
 import { awardFor, moveInterval, type Award } from './progression'
 import { chooseDistractors, chooseTarget, freeCells } from './spawn'
@@ -95,9 +95,14 @@ export class World {
     // chance to subscribe yet. The owner calls reset() once listeners exist.
   }
 
-  /** 0..1 through the current move. Rendering interpolates with this. */
-  get alpha(): number {
-    return Math.min(1, this.moveClock / this.interval)
+  /**
+   * 0..1 through the current move, for render interpolation. `extra` is the
+   * loop's not-yet-simulated remainder in seconds (loop alpha x FIXED_DT),
+   * folded in so drawn positions track real time instead of quantizing to
+   * fixed steps — without it the snake visibly micro-stutters.
+   */
+  renderAlpha(extra = 0): number {
+    return Math.min(1, (this.moveClock + extra) / this.interval)
   }
 
   reset(): void {
@@ -217,10 +222,13 @@ export class World {
   }
 
   private onCorrect(item: Item): void {
+    // Streak first, then the award: the bite that REACHES a multiplier is the
+    // bite that gets paid at it, so the gold "x2" celebration and the "+N"
+    // popup beside it can never contradict each other.
+    this.streak += 1
     const award = awardFor(this.streak, this.targetAge, this.mode)
     this.score += award.points
     this.eaten += 1
-    this.streak += 1
     this.bestStreak = Math.max(this.bestStreak, this.streak)
     this.statFor(item.ch).ok += 1
     this.setInterval(moveInterval(this.eaten, this.mode))
@@ -289,6 +297,36 @@ export class World {
     return s
   }
 
+  /**
+   * Free cells with a fairness guarantee: cells the head can reach within the
+   * next two moves (Manhattan distance <= 2, wrap-aware) are placed last, so
+   * a tile never materializes in the snake's path on the very step it spawns
+   * — that was an unavoidable wrong bite about 1.5% of the time. Near-full
+   * boards still fall back to the excluded zone rather than failing to spawn.
+   */
+  private spawnCells(): number[] {
+    const free = freeCells(BOARD.cells, this.occupied(), this.rng)
+    const head = this.snake[0]
+    if (!head) return free
+    const danger = new Set<number>()
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        if (Math.abs(dx) + Math.abs(dy) > 2) continue
+        let x = head.x + dx
+        let y = head.y + dy
+        if (this.mode.wrap) {
+          x = (x + BOARD.cells) % BOARD.cells
+          y = (y + BOARD.cells) % BOARD.cells
+        } else if (x < 0 || y < 0 || x >= BOARD.cells || y >= BOARD.cells) {
+          continue
+        }
+        danger.add(idx(x, y))
+      }
+    }
+    const safe = free.filter((c) => !danger.has(c))
+    return safe.length ? [...safe, ...free.filter((c) => danger.has(c))] : free
+  }
+
   private occupied(): Set<number> {
     const set = new Set<number>()
     for (const s of this.snake) set.add(idx(s.x, s.y))
@@ -297,7 +335,7 @@ export class World {
   }
 
   private firstFreeCell(): { x: number; y: number } | null {
-    const free = freeCells(BOARD.cells, this.occupied(), this.rng)
+    const free = this.spawnCells()
     const cell = free[0]
     if (cell === undefined) return null
     return { x: cell % BOARD.cells, y: Math.floor(cell / BOARD.cells) }
@@ -317,10 +355,10 @@ export class World {
       this.table,
       target,
       this.rng,
-      Math.min(4, Math.max(0, Object.keys(this.table).length - 1)),
+      Math.min(SPAWN.distractors, Math.max(0, Object.keys(this.table).length - 1)),
     )
 
-    const free = freeCells(BOARD.cells, this.occupied(), this.rng)
+    const free = this.spawnCells()
     const wanted = [target, ...distractors]
     // If the board is nearly full there may be fewer cells than characters.
     // Place what fits — the target is first in the list, so it always lands.

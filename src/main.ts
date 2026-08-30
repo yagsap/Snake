@@ -6,8 +6,8 @@
  * all of them. The scene stack decides who updates and who draws each frame;
  * the fixed-timestep loop decides when.
  */
-import { GameLoop } from './core/loop'
-import { bindInput, type Dir } from './core/input'
+import { FIXED_DT, GameLoop } from './core/loop'
+import { bindInput, DIR_VECTORS, type Dir } from './core/input'
 import { SceneStack, type Scene } from './core/scene'
 import { load, save, saveNow, type SaveData } from './core/storage'
 import { buildTable, LANGUAGES, setNamesFor, type CharTable } from './data/scripts'
@@ -20,6 +20,7 @@ import { HitStop } from './render/camera'
 import { Speech, Tones } from './ui/audio'
 import { Hud } from './ui/hud'
 import { ChartView, GameOverView, MenuView } from './ui/menus'
+import { haptic, initNativeChrome } from './ui/native'
 
 const data: SaveData = load()
 let table: CharTable = buildTable(data.lang, data.setName)
@@ -64,7 +65,9 @@ function makePlayScene(): Scene {
 
       disposers.push(
         w.events.on('spawned', ({ target, sound }) => {
-          hud.setCue(data.showRomaji ? sound : '♪')
+          // If no voice resolved, the sound MUST be shown — a mute '♪' would
+          // make the target unknowable.
+          hud.setCue(data.showRomaji || !speech.current ? sound : '♪')
           hud.pulseSeal()
           speech.speak(target)
         }),
@@ -78,17 +81,20 @@ function makePlayScene(): Scene {
           hud.setStreak(streak)
           renderer.popEat()
           renderer.camera.addTrauma(JUICE.traumaOnEat)
+          const v = DIR_VECTORS[w.input.current]
           renderer.fx.ring(c.x, c.y, THEME.jade, JUICE.ringLife)
-          renderer.fx.burst(c.x, c.y, THEME.jadeBright, 10, 240)
+          renderer.fx.burst(c.x, c.y, THEME.jadeBright, 10, 240, v.x, v.y)
           renderer.fx.text(c.x, c.y, `+${award.points}`, THEME.jadeBright)
           if (award.speedBonus > 0) {
             renderer.fx.text(c.x, c.y + 20, `fast +${award.speedBonus}`, THEME.gold, 0.8, 13)
           }
           if (isMult > wasMult) {
+            haptic.multiplier()
             tones.multiplierUp()
             renderer.flash.fire(THEME.jade, 0.12)
             renderer.fx.text(c.x, c.y - 26, `×${isMult}`, THEME.gold, 1.1, 26)
           } else {
+            haptic.eat()
             tones.eat(streak)
           }
         }),
@@ -100,9 +106,11 @@ function makePlayScene(): Scene {
           renderer.camera.addTrauma(JUICE.traumaOnWrong)
           renderer.flash.fire(THEME.shu, 0.18)
           hitStop.request(JUICE.hitStopWrong)
+          haptic.wrong()
           tones.wrong()
+          const v = DIR_VECTORS[w.input.current]
           renderer.fx.ring(c.x, c.y, THEME.shu, JUICE.wrongRingLife)
-          renderer.fx.burst(c.x, c.y, THEME.shuSoft, 8, 200)
+          renderer.fx.burst(c.x, c.y, THEME.shuSoft, 8, 200, v.x, v.y)
           // The teaching moment: what you bit, and what you should have bitten.
           renderer.fx.text(
             c.x, c.y,
@@ -122,6 +130,7 @@ function makePlayScene(): Scene {
           renderer.camera.addTrauma(JUICE.traumaOnDeath)
           renderer.flash.fire(THEME.shu, 0.3)
           hitStop.request(JUICE.hitStopDeath)
+          haptic.death()
           tones.death()
 
           const isRecord = score > data.bestScore
@@ -131,11 +140,16 @@ function makePlayScene(): Scene {
 
           // Let the death sink in before the card: the crash the player just
           // made is information, and covering it instantly hides the lesson.
-          setTimeout(() => {
-            if (scenes.top?.name === 'play') {
-              scenes.push(makeGameOverScene(isRecord))
-            }
+          // The timer is owned by this scene (cleared on exit) and checks
+          // world identity, so quit/restart inside the window can't race it,
+          // and an overlay pushed meanwhile is popped rather than orphaning
+          // the card.
+          const timer = setTimeout(() => {
+            if (world !== w || !scenes.has('play') || scenes.has('gameover')) return
+            while (scenes.top && scenes.top.name !== 'play') scenes.pop()
+            scenes.push(makeGameOverScene(isRecord))
           }, 700)
+          disposers.push(() => clearTimeout(timer))
         }),
       )
 
@@ -155,11 +169,11 @@ function makePlayScene(): Scene {
       world?.update(dt)
     },
 
-    render(_alpha, dt) {
+    render(alpha, dt) {
       if (!world) return
       hud.update(dt)
       renderer.update(dt)
-      renderer.draw(world, world.alpha, {
+      renderer.draw(world, world.renderAlpha(alpha * FIXED_DT), {
         paused: scenes.has('pause'),
         dimmed: scenes.has('gameover'),
       })
@@ -276,7 +290,11 @@ const chartView = new ChartView({
   },
   onReset() {
     if (!confirm(`Clear your ${LANGUAGES[data.lang].name} progress?`)) return
-    for (const ch of Object.keys(table)) delete data.stats[ch]
+    // Every set of the language, not just the visible table — the confirm
+    // names the language, so that is what gets cleared.
+    for (const set of Object.values(LANGUAGES[data.lang].sets)) {
+      for (const ch of Object.keys(set)) delete data.stats[ch]
+    }
     save(data)
     if (scenes.top?.name === 'chart') {
       chartView.open(data, table) // re-render with cleared stats
@@ -290,8 +308,10 @@ const chartView = new ChartView({
   },
   onShowRomaji(show) {
     data.showRomaji = show
-    hud.setSealHidden(!show)
-    if (world?.target) hud.setCue(show ? (table[world.target] ?? '—') : '♪')
+    hud.setSealHidden(!show && !!speech.current)
+    if (world?.target) {
+      hud.setCue(show || !speech.current ? (table[world.target] ?? '—') : '♪')
+    }
     save(data)
   },
   onReducedMotion(reduced) {
@@ -348,17 +368,23 @@ bindInput(canvas, {
         break
       case 'learn':
         if (top === 'chart') scenes.pop()
-        else if (top === 'play' || top === 'pause' || top === 'menu') {
+        else if (top === 'pause' || top === 'menu' || (top === 'play' && world?.alive)) {
           scenes.push(makeChartScene())
         }
         break
       case 'escape':
         if (top === 'chart' || top === 'pause') scenes.pop()
-        else if (top === 'play') scenes.push(makePauseScene())
+        else if (top === 'play' && world?.alive) scenes.push(makePauseScene())
         break
     }
   },
-  isBlocked: () => scenes.top?.name !== 'play',
+  isBlocked: () => {
+    // 'pause' stays unblocked so space/tap can replay the cue — a paused
+    // screen is exactly where a learner studies the sound. Turns are still
+    // gated per-action above (onTurn checks the top scene is 'play').
+    const top = scenes.top?.name
+    return top !== 'play' && top !== 'pause'
+  },
 })
 
 document.getElementById('pauseBtn')?.addEventListener('click', () => {
@@ -403,8 +429,9 @@ const loop = new GameLoop({
   },
 })
 
+initNativeChrome()
 chartView.syncSettings(data)
-hud.setSealHidden(!data.showRomaji)
+hud.setSealHidden(!data.showRomaji && !!speech.current)
 syncVoices()
 scenes.push(makeMenuScene())
 loop.start()

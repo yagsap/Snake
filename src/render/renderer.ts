@@ -84,13 +84,20 @@ function roundRect(
   ctx.closePath()
 }
 
-/** Parse '#rrggbb' once per call site; blends two hex colours. */
+/**
+ * Blend two '#rrggbb' colours. Returns hex, not rgb(): the recoil wash blends
+ * an already-blended body colour a second time, so the output format must be
+ * parseable as an input — rgb() fed back in parsed as NaN and the body
+ * vanished for the length of the recoil.
+ */
 function mixHex(a: string, b: string, t: number): string {
   const parse = (h: string) =>
     [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
   const A = parse(a)
   const B = parse(b)
-  return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i] ?? v, t))).join(',')})`
+  return `#${A.map((v, i) =>
+    Math.round(lerp(v, B[i] ?? v, t)).toString(16).padStart(2, '0'),
+  ).join('')}`
 }
 
 export interface RenderOptions {

@@ -1,4 +1,5 @@
 import { LANGUAGES, type LangId } from '../data/scripts'
+import { nativeSpeak } from './native'
 
 /**
  * Speech (the cue) and synthesised tones (the feedback).
@@ -72,7 +73,12 @@ export class Speech {
   }
 
   speak(text: string): void {
-    if (!this.voice || !text) return
+    if (!text) return
+    if (!this.voice) {
+      // No webview voice for this language — try the native synthesizer.
+      nativeSpeak(text, this.lang)
+      return
+    }
     speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(
       // A trailing ideographic stop makes ja/zh voices read a bare character
