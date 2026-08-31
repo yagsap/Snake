@@ -39,6 +39,7 @@ import {
   MenuView,
 } from './ui/menus'
 import { haptic, initNativeChrome } from './ui/native'
+import { Diag } from './ui/diag'
 
 const data: SaveData = load()
 let table: CharTable = buildTable(data.lang, data.setName)
@@ -50,6 +51,8 @@ const speech = new Speech(data.lang, data.voices)
 const tones = new Tones()
 const hud = new Hud()
 const scenes = new SceneStack()
+/** Null unless ?debug is on the URL — see src/ui/diag.ts. */
+const diag = Diag.enabled ? new Diag() : null
 
 let world: World | null = null
 
@@ -186,6 +189,8 @@ function makePlayScene(r: RunConfig): Scene {
           hud.setGoal(goalText(r, w))
         }),
 
+        w.events.on('moved', () => diag?.move(w.interval)),
+
         w.events.on('wordProgress', ({ entry, index }) => {
           hud.setWord(entry.w, index)
         }),
@@ -307,6 +312,7 @@ function makePlayScene(r: RunConfig): Scene {
       )
 
       disposers.push(() => w.events.clear())
+      diag?.resetRun()
       w.reset()
       loop.resync()
     },
@@ -602,7 +608,12 @@ function syncVoices(): void {
 
 bindInput(canvas, {
   onTurn(dir: Dir) {
-    if (scenes.top?.name === 'play') world?.turn(dir)
+    if (scenes.top?.name !== 'play') return
+    // Never inline this into the diag call: `diag?.turn(world.turn(dir))`
+    // short-circuits the ARGUMENT too when diag is off, which silently
+    // disabled steering for everyone without the debug flag.
+    const accepted = world?.turn(dir) === true
+    diag?.turn(accepted)
   },
   onAction(action) {
     const top = scenes.top?.name
@@ -632,6 +643,7 @@ bindInput(canvas, {
         break
     }
   },
+  onRawInput: () => diag?.input(),
   isBlocked: () => {
     // 'pause' stays unblocked so space/tap can replay the cue — a paused
     // screen is exactly where a learner studies the sound. Turns are still
@@ -716,6 +728,7 @@ const loop = new GameLoop({
   },
   render(alpha, dt) {
     scenes.render(alpha, dt)
+    diag?.frame(dt)
   },
 })
 

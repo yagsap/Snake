@@ -100,6 +100,8 @@ export interface InputHandlers {
   onAction(action: string): void
   /** Input is ignored entirely while this returns true (e.g. a modal is open). */
   isBlocked(): boolean
+  /** Optional probe, called the moment a raw device event arrives. */
+  onRawInput?(): void
 }
 
 /**
@@ -126,6 +128,7 @@ export function bindInput(
     const dir = KEY_MAP[e.key]
     if (dir) {
       e.preventDefault()
+      handlers.onRawInput?.()
       if (!handlers.isBlocked()) handlers.onTurn(dir)
       return
     }
@@ -152,55 +155,88 @@ export function bindInput(
   addEventListener('keydown', onKeyDown)
   disposers.push(() => removeEventListener('keydown', onKeyDown))
 
-  // Swipe. Tracked by pointerId so a stray second finger cannot hijack the
-  // gesture midway and produce a turn the player never made.
-  let startX = 0
-  let startY = 0
+  /**
+   * Swipe steering.
+   *
+   * The turn fires the instant the finger has travelled far enough, from
+   * pointermove — NOT on pointerup. Waiting for the lift put the whole
+   * duration of the gesture, 100-250ms of it, between the player's intent and
+   * the snake reacting; on a device where every turn is a swipe that is felt
+   * as the snake lagging behind the hand, and no amount of rendering work
+   * fixes it because the input simply had not arrived yet.
+   *
+   * Firing on movement also makes steering CONTINUOUS: the anchor resets
+   * after each turn, so one long drag can round several corners instead of
+   * spending a whole finger-down/up cycle on a single turn.
+   *
+   * Tracked by pointerId so a stray second finger cannot hijack the gesture
+   * midway and produce a turn the player never made.
+   */
+  let anchorX = 0
+  let anchorY = 0
   let activeId: number | null = null
+  /** Did this gesture ever cross the threshold? If not, the lift is a tap. */
+  let swiped = false
+  /** Last direction this gesture asked for, so a long drag in one direction
+   *  re-anchors without spamming turns the snake is already committed to. */
+  let lastDir: Dir | null = null
+
+  const dirOf = (dx: number, dy: number): Dir =>
+    Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'
 
   const onPointerDown = (e: PointerEvent) => {
     if (activeId !== null) return
     activeId = e.pointerId
-    startX = e.clientX
-    startY = e.clientY
-    // Capture the pointer so the matching pointerup reaches this surface even
-    // when the finger lifts outside it — fast swipes routinely end off-canvas,
-    // and without capture those swipes were silently dropped.
+    anchorX = e.clientX
+    anchorY = e.clientY
+    swiped = false
+    lastDir = null
+    // Capture the pointer so moves and the matching pointerup reach this
+    // surface even when the finger leaves it — fast swipes routinely end
+    // off-canvas, and without capture those swipes were silently dropped.
     try {
       surface.setPointerCapture(e.pointerId)
     } catch {
       /* capture is best-effort */
     }
   }
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (e.pointerId !== activeId || handlers.isBlocked()) return
+    const dx = e.clientX - anchorX
+    const dy = e.clientY - anchorY
+    if (Math.hypot(dx, dy) < SWIPE_THRESHOLD) return
+    swiped = true
+    // Re-anchor where the threshold was crossed, so the next leg of the same
+    // drag is measured from here rather than from where the finger landed.
+    anchorX = e.clientX
+    anchorY = e.clientY
+    const dir = dirOf(dx, dy)
+    if (dir === lastDir) return // already asked for this on this drag
+    lastDir = dir
+    handlers.onRawInput?.()
+    handlers.onTurn(dir)
+  }
+
   const onPointerUp = (e: PointerEvent) => {
     if (e.pointerId !== activeId) return
     activeId = null
-    if (handlers.isBlocked()) return
-    const dx = e.clientX - startX
-    const dy = e.clientY - startY
-    if (Math.hypot(dx, dy) < SWIPE_THRESHOLD) {
-      handlers.onAction('tap')
-      return
-    }
-    handlers.onTurn(
-      Math.abs(dx) > Math.abs(dy)
-        ? dx > 0
-          ? 'right'
-          : 'left'
-        : dy > 0
-          ? 'down'
-          : 'up',
-    )
+    if (handlers.isBlocked() || swiped) return
+    // Never moved far enough to be a swipe: this was a tap (replay the cue).
+    handlers.onAction('tap')
   }
+
   const onPointerCancel = (e: PointerEvent) => {
     if (e.pointerId === activeId) activeId = null
   }
 
   surface.addEventListener('pointerdown', onPointerDown)
+  surface.addEventListener('pointermove', onPointerMove)
   surface.addEventListener('pointerup', onPointerUp)
   surface.addEventListener('pointercancel', onPointerCancel)
   disposers.push(() => {
     surface.removeEventListener('pointerdown', onPointerDown)
+    surface.removeEventListener('pointermove', onPointerMove)
     surface.removeEventListener('pointerup', onPointerUp)
     surface.removeEventListener('pointercancel', onPointerCancel)
   })
@@ -212,6 +248,7 @@ export function bindInput(
     if (!dir) continue
     const onDown = (e: Event) => {
       e.preventDefault()
+      handlers.onRawInput?.()
       if (!handlers.isBlocked()) handlers.onTurn(dir)
     }
     btn.addEventListener('pointerdown', onDown)
