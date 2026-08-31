@@ -314,7 +314,102 @@ const HI: Draft[] = [
   ], { wrap: false }),
 ]
 
-const DRAFTS: Record<LangId, Draft[]> = { ja: JA, zh: ZH, ru: RU, hi: HI }
+const EN: Draft[] = [
+  chapter('A to E', 'ABCDE', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('F to J', 'FGHIJABCDE'),
+  gauntlet('the bee family', 'BCDEGPTVZ', { goal: G(12, 2) }),
+  chapter('K to O', 'KLMNOFGHIJ', { layout: 'garden' }),
+  words('first words', [
+    { w: 'CAT', gloss: 'cat' }, { w: 'DOG', gloss: 'dog' },
+    { w: 'BED', gloss: 'bed' }, { w: 'FIG', gloss: 'fig' },
+    { w: 'HEN', gloss: 'hen' }, { w: 'JAM', gloss: 'jam' },
+  ]),
+  chapter('P to T', 'PQRSTKLMNO'),
+  gauntlet('mirror shapes', 'OQPRBDUV'),
+  chapter('U to Z', 'UVWXYZPQRST', { layout: 'torii' }),
+  reverse('recall: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+  ear('by ear: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', { goal: G(15, 4) }),
+  words('longer words', [
+    { w: 'BIRD', gloss: 'bird' }, { w: 'FISH', gloss: 'fish' },
+    { w: 'HORSE', gloss: 'horse' }, { w: 'PLANT', gloss: 'plant' },
+    { w: 'MUSIC', gloss: 'music' }, { w: 'CLOUD', gloss: 'cloud' },
+    { w: 'SNAKE', gloss: 'you' },
+  ]),
+  chapter('small letters', 'abcdefghij'),
+  gauntlet('b d p q', 'bdpq', { goal: G(12, 2), paceScale: 1.1 }),
+  chapter('small: k to t', 'klmnopqrstabcde', { layout: 'garden' }),
+  chapter('small: u to z', 'uvwxyzklmnopqrst'),
+  gauntlet('small lookalikes', 'nuwmilaoce'),
+  words('small words', [
+    { w: 'sun', gloss: 'sun' }, { w: 'cake', gloss: 'cake' },
+    { w: 'gold', gloss: 'gold' }, { w: 'wind', gloss: 'wind' },
+    { w: 'lamp', gloss: 'lamp' }, { w: 'desk', gloss: 'desk' },
+  ]),
+  reverse('recall: a to z', 'abcdefghijklmnopqrstuvwxyz'),
+  ear('by ear: a to z', 'abcdefghijklmnopqrstuvwxyz', { goal: G(15, 4) }),
+  gauntlet('the whole alphabet', 'BCDEGPTVZbdpqnuwmMN', {
+    goal: G(15, 2), paceScale: 1.3, layout: 'box',
+  }),
+]
+
+const KO: Draft[] = [
+  chapter('first consonants', 'ㄱㄴㄷㄹㅁ', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('more consonants', 'ㅂㅅㅇㅈㅎㄱㄴㄷㄹㅁ'),
+  chapter('the aspirated', 'ㅋㅌㅍㅊㄱㄷㅂㅈ', { layout: 'garden' }),
+  gauntlet('one more stroke', 'ㄱㅋㄷㅌㅂㅍㅈㅊ', { goal: G(12, 2) }),
+  chapter('the vowels', 'ㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ'),
+  gauntlet('one more tick', 'ㅏㅑㅓㅕㅗㅛㅜㅠ'),
+  chapter('the tense pairs', 'ㄲㄸㅃㅆㅉㄱㄷㅂㅅㅈ', { layout: 'torii' }),
+  reverse('recall: the jamo', 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ'),
+  ear('by ear: the jamo', 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ', { goal: G(15, 4) }),
+  chapter('first syllables', '가나다라마'),
+  chapter('more syllables', '바사아자하가나다라마'),
+  words('first words', [
+    { w: '나비', gloss: 'butterfly' }, { w: '바다', gloss: 'sea' },
+    { w: '다리', gloss: 'bridge' }, { w: '소리', gloss: 'sound' },
+    { w: '아기', gloss: 'baby' }, { w: '구두', gloss: 'shoes' },
+    { w: '모자', gloss: 'hat' }, { w: '나무', gloss: 'tree' },
+  ]),
+  chapter('the o and u rows', '고노도로모보소오조초코토포호'),
+  gauntlet('syllable lookalikes', '가카다타바파사자'),
+  words('more words', [
+    { w: '하루', gloss: 'a day' }, { w: '부모', gloss: 'parents' },
+    { w: '우주', gloss: 'universe' }, { w: '기타', gloss: 'guitar' },
+    { w: '도시', gloss: 'city' }, { w: '가수', gloss: 'singer' },
+  ], { wrap: false }),
+  ear('by ear: syllables', '가나다라마바사아자차카타파하고노도로모보', { goal: G(15, 4) }),
+]
+
+const EL: Draft[] = [
+  chapter('alpha to epsilon', 'ΑΒΓΔΕ', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('zeta to kappa', 'ΖΗΘΙΚΑΒΓΔΕ'),
+  chapter('lambda to xi', 'ΛΜΝΞΖΗΘΙΚ', { layout: 'garden' }),
+  gauntlet('the i sounds', 'ΗΙΥΕΟ', { goal: G(12, 2) }),
+  chapter('omicron to sigma', 'ΟΠΡΣΛΜΝΞ'),
+  gauntlet('round ones', 'ΟΘΦΩΣ'),
+  chapter('tau to omega', 'ΤΥΦΧΨΩΟΠΡΣ', { layout: 'torii' }),
+  words('first words', [
+    { w: 'ΦΩΣ', gloss: 'light' }, { w: 'ΝΕΡΟ', gloss: 'water' },
+    { w: 'ΗΛΙΟΣ', gloss: 'sun' }, { w: 'ΨΑΡΙ', gloss: 'fish' },
+    { w: 'ΜΗΛΟ', gloss: 'apple' }, { w: 'ΖΩΗ', gloss: 'life' },
+    { w: 'ΞΥΛΟ', gloss: 'wood' }, { w: 'ΤΥΡΙ', gloss: 'cheese' },
+  ]),
+  reverse('recall: capitals', 'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ'),
+  ear('by ear: capitals', 'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ', { goal: G(15, 4) }),
+  chapter('small: alpha to theta', 'αβγδεζηθ'),
+  chapter('small: iota to pi', 'ικλμνξοπαβγδε'),
+  gauntlet('small lookalikes', 'νυμθφζξ'),
+  chapter('small: rho to omega', 'ρστυφχψωικλμν', { layout: 'garden' }),
+  reverse('recall: small letters', 'αβγδεζηθικλμνξοπρστυφχψω'),
+  ear('by ear: everything', 'αβγδεζηθικλμνξοπρστυφχψω', { goal: G(15, 4) }),
+  gauntlet('every lookalike', 'νυμθφζξηιοωπρ', {
+    goal: G(15, 2), paceScale: 1.3, layout: 'box',
+  }),
+]
+
+const DRAFTS: Record<LangId, Draft[]> = {
+  en: EN, ja: JA, zh: ZH, ru: RU, hi: HI, ko: KO, el: EL,
+}
 
 export const CAMPAIGNS: Record<LangId, LevelSpec[]> = Object.fromEntries(
   (Object.keys(DRAFTS) as LangId[]).map((lang) => [

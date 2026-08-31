@@ -18,10 +18,13 @@ export const isNativeApp = Capacitor.isNativePlatform()
 
 /** BCP-47 tags for the native synthesizer (AVSpeechSynthesizer on iOS). */
 const TTS_LANG: Record<LangId, string> = {
+  en: 'en-US',
   ja: 'ja-JP',
   zh: 'zh-CN',
   ru: 'ru-RU',
   hi: 'hi-IN',
+  ko: 'ko-KR',
+  el: 'el-GR',
 }
 
 /** One-time app-shell chrome setup. Call at bootstrap. */

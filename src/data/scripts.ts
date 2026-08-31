@@ -34,6 +34,39 @@ export const CYRILLIC = table(
   'Аa Бb Вv Гg Дd Еye Ёyo Жzh Зz Иi Йy Кk Лl Мm Нn Оo Пp Рr Сs Тt Уu Фf Хkh Цts Чch Шsh Щshch Ыɨ Эe Юyu Яya',
 )
 
+/** English letters, cued by their names — the game teaches the alphabet. */
+export const LATIN_UPPER = table(
+  'Aay Bbee Csee Ddee Eee Fef Gjee Haitch Ieye Jjay Kkay Lel Mem Nen Ooh Ppee Qcue Rar Ses Ttee Uyou Vvee Wdouble-u Xex Ywhy Zzee',
+)
+
+export const LATIN_LOWER = table(
+  'aay bbee csee ddee eee fef gjee haitch ieye jjay kkay lel mem nen ooh ppee qcue rar ses ttee uyou vvee wdouble-u xex ywhy zzee',
+)
+
+/**
+ * Hangul letters (compatibility jamo). Consonants carry their LETTER NAMES,
+ * not their bare sounds, because that is what a Korean voice actually says
+ * when handed the character — the cue and the caption have to agree. Vowels
+ * are named by their sound already.
+ */
+export const HANGUL_JAMO = table(
+  'ㄱgiyeok ㄴnieun ㄷdigeut ㄹrieul ㅁmieum ㅂbieup ㅅsiot ㅇieung ㅈjieut ㅊchieut ㅋkieuk ㅌtieut ㅍpieup ㅎhieut ㄲssang-giyeok ㄸssang-digeut ㅃssang-bieup ㅆssang-siot ㅉssang-jieut ㅏa ㅑya ㅓeo ㅕyeo ㅗo ㅛyo ㅜu ㅠyu ㅡeu ㅣi ㅐae ㅔe',
+)
+
+/** Basic CV syllables: the fourteen base consonants crossed with a/o/u/i. */
+export const HANGUL_SYLLABLES = table(
+  '가ga 나na 다da 라ra 마ma 바ba 사sa 아a 자ja 차cha 카ka 타ta 파pa 하ha 고go 노no 도do 로ro 모mo 보bo 소so 오o 조jo 초cho 코ko 토to 포po 호ho 구gu 누nu 두du 루ru 무mu 부bu 수su 우u 주ju 추chu 쿠ku 투tu 푸pu 후hu 기gi 니ni 디di 리ri 미mi 비bi 시si 이i 지ji 치chi 키ki 티ti 피pi 히hi',
+)
+
+/** Greek letters, cued by their names. All glyphs are Greek-block code points. */
+export const GREEK_UPPER = table(
+  'Αalpha Βbeta Γgamma Δdelta Εepsilon Ζzeta Ηeta Θtheta Ιiota Κkappa Λlambda Μmu Νnu Ξxi Οomicron Πpi Ρrho Σsigma Τtau Υupsilon Φphi Χchi Ψpsi Ωomega',
+)
+
+export const GREEK_LOWER = table(
+  'αalpha βbeta γgamma δdelta εepsilon ζzeta ηeta θtheta ιiota κkappa λlambda μmu νnu ξxi οomicron πpi ρrho σsigma τtau υupsilon φphi χchi ψpsi ωomega',
+)
+
 export const DEVANAGARI_VOWELS = table('अa आā इi ईī उu ऊū एe ऐai ओo औau')
 
 export const DEVANAGARI_CONSONANTS = table(
@@ -42,7 +75,10 @@ export const DEVANAGARI_CONSONANTS = table(
 
 export interface Language {
   readonly name: string
-  /** The word "snake", shown on the title. */
+  /**
+   * A short word in this script, shown beside the title — "snake" wherever
+   * that reads well, the alphabet's own name where it would not.
+   */
   readonly word: string
   /** BCP-47 prefix used to match a speech-synthesis voice. */
   readonly tts: string
@@ -54,6 +90,14 @@ export interface Language {
 }
 
 export const LANGUAGES = {
+  en: {
+    name: 'English',
+    word: 'ABC',
+    tts: 'en',
+    labels: ['English', 'A–Z'],
+    chartColumns: 6,
+    sets: { capitals: LATIN_UPPER, small: LATIN_LOWER },
+  },
   ja: {
     name: 'Japanese',
     word: 'へび',
@@ -85,6 +129,22 @@ export const LANGUAGES = {
     labels: ['हिन्दी', 'Hindi'],
     chartColumns: 5,
     sets: { vowels: DEVANAGARI_VOWELS, consonants: DEVANAGARI_CONSONANTS },
+  },
+  ko: {
+    name: 'Korean',
+    word: '뱀',
+    tts: 'ko',
+    labels: ['한국어', 'Korean'],
+    chartColumns: 6,
+    sets: { letters: HANGUL_JAMO, syllables: HANGUL_SYLLABLES },
+  },
+  el: {
+    name: 'Greek',
+    word: 'φίδι',
+    tts: 'el',
+    labels: ['Ελληνικά', 'Greek'],
+    chartColumns: 6,
+    sets: { capitals: GREEK_UPPER, small: GREEK_LOWER },
   },
 } as const satisfies Record<string, Language>
 
@@ -128,6 +188,25 @@ export const CONFUSABLE_GROUPS: readonly string[] = [
   // devanagari
   'घध', 'भम', 'बव', 'टठ', 'डढ', 'पफ', 'गण', 'तन', 'इई', 'उऊ', 'एऐ', 'ओऔ',
   'यथ', 'शष', 'छद', 'ङड', 'खरव', 'ञज', 'अआ',
+  // latin capitals — shape first, then the rhyming names, which are what
+  // actually defeats a learner listening rather than looking
+  'OQ', 'PR', 'EF', 'MN', 'VW', 'IJ', 'CG', 'BD', 'UV', 'KX', 'SZ', 'ILT',
+  'BCDEGPTVZ', 'FS', 'IY', 'JK', 'QU', 'AH',
+  // latin small — bdpq are the same shape rotated, the classic reversal set
+  'bdpq', 'nu', 'mw', 'il', 'ao', 'ce', 'gq', 'vy', 'fj', 'hn', 'kx', 'sz',
+  'bcdegptvz', 'mn', 'iy', 'rn',
+  // hangul jamo — a stroke or a doubling apart
+  'ㄱㅋㄲ', 'ㄷㅌㄸ', 'ㅂㅍㅃ', 'ㅅㅆㅈㅊㅉ', 'ㅇㅎ', 'ㄴㄷ', 'ㄹㄴ', 'ㅁㅂ',
+  'ㅏㅑ', 'ㅓㅕ', 'ㅗㅛ', 'ㅜㅠ', 'ㅡㅣ', 'ㅐㅔ', 'ㅏㅓ', 'ㅗㅜ', 'ㅣㅏ',
+  // hangul syllables — same vowel, neighbouring consonant
+  '가카', '다타', '바파', '사자차', '아하', '고코', '도토', '보포', '구쿠',
+  '두투', '부푸', '기키', '디티', '비피', '가나', '나다', '마바', '오호',
+  // greek capitals
+  'ΟΘΦΩ', 'ΕΞΣ', 'ΝΜ', 'ΧΨ', 'ΠΓΤ', 'ΒΡ', 'ΔΛΑ', 'ΙΤ', 'ΥΨ', 'ΖΞ', 'ΗΙΥ',
+  'ΚΧ', 'ΟΩ',
+  // greek small
+  'νυ', 'ρπ', 'ζξ', 'θφ', 'εσ', 'μυ', 'κχ', 'δα', 'βθ', 'σο', 'τγ', 'λχ',
+  'ηπ', 'ηιυ', 'οω', 'ψφ', 'ωμ',
 ]
 
 /**
