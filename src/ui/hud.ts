@@ -100,11 +100,18 @@ export class Hud {
       .join('')
   }
 
-  /** Pulse the seal — visual confirmation that the cue just played. */
+  /**
+   * Pulse the seal — visual confirmation that the cue just played.
+   *
+   * Restarting a CSS animation classically means reading `offsetWidth` to
+   * force a reflow. That read is a SYNCHRONOUS LAYOUT of the whole document,
+   * on the frame a new character appears, on a phone, inside the game loop.
+   * Deferring the re-add to the next frame restarts the animation just as
+   * reliably and never blocks.
+   */
   pulseSeal(): void {
     this.sealEl.classList.remove('pulse')
-    void this.sealEl.offsetWidth // restart the CSS animation
-    this.sealEl.classList.add('pulse')
+    requestAnimationFrame(() => this.sealEl.classList.add('pulse'))
   }
 
   setSealHidden(hidden: boolean): void {

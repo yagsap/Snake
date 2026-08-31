@@ -168,6 +168,7 @@ function makePlayScene(r: RunConfig): Scene {
       world = w
 
       const showCue = (target: string, sound: string) => {
+        diag?.mark('cue')
         if (r.reverse) {
           // The glyph IS the question; speaking it would answer a tile.
           hud.setCue(target)
@@ -210,6 +211,7 @@ function makePlayScene(r: RunConfig): Scene {
         }),
 
         w.events.on('eat', ({ item, award, streak, score }) => {
+          diag?.mark('eat')
           const c = renderer.centerOf(item)
           const wasMult = comboMultiplier(streak - 1)
           const isMult = comboMultiplier(streak)
@@ -728,7 +730,7 @@ const loop = new GameLoop({
   },
   render(alpha, dt) {
     scenes.render(alpha, dt)
-    diag?.frame(dt)
+    diag?.frame()
   },
 })
 

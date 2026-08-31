@@ -135,6 +135,8 @@ export class Renderer {
    * on phones, and the colours only change when the snake grows or shrinks.
    */
   private bodyColors: string[] = []
+  /** Reused interpolated-position buffer; see drawSnake. */
+  private ptsBuf: Array<{ x: number; y: number }> = []
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
@@ -281,24 +283,20 @@ export class Renderer {
 
       // No card behind the character: a box can be overflowed by a tall
       // script (Devanagari ascenders escaped it on every phone font tried),
-      // but a bare glyph has nothing to escape. The shadow lifts it off the
-      // wave field, and dropping the card bought room for much bigger ink.
-      ctx.save()
-      ctx.shadowColor = 'rgba(0,0,0,.55)'
-      // Blur cost grows with radius squared and this runs per glyph per
-      // frame on phone GPUs; 3 reads the same at cell size as 8 did.
-      ctx.shadowBlur = 3
-      ctx.shadowOffsetY = 2
+      // but a bare glyph has nothing to escape. Dropping the card also bought
+      // room for much bigger ink.
+      //
+      // The lift off the wave field is a hand-drawn drop copy rather than
+      // ctx.shadowBlur. A blurred shadow is one of the most expensive things
+      // a 2-D canvas can do and this runs for every tile on every frame; two
+      // fillText calls cost a fraction of one blur.
+      const text = world.reverse ? world.soundOf(it.ch) : it.ch
+      // Reverse level: tiles show the SOUND; the cue shows the glyph.
+      const size = (world.reverse ? CELL * 0.46 : CELL * 0.88) * scale
+      ctx.fillStyle = 'rgba(0,0,0,.5)'
+      glyph(ctx, text, x + 1, y + 2, size, CELL, CELL)
       ctx.fillStyle = THEME.washi
-      if (world.reverse) {
-        // Reverse level: tiles show the SOUND; the cue shows the glyph.
-        glyph(ctx, world.soundOf(it.ch), x, y, CELL * 0.46 * scale, CELL, CELL)
-      } else {
-        // A full cell of ink: with no card to fit inside, readability is the
-        // only constraint that matters, especially at phone sizes.
-        glyph(ctx, it.ch, x, y, CELL * 0.88 * scale, CELL, CELL)
-      }
-      ctx.restore()
+      glyph(ctx, text, x, y, size, CELL, CELL)
     }
   }
 
@@ -355,9 +353,26 @@ export class Renderer {
      * instead. Nudging the previous coordinate to the nearer wrapped copy
      * first makes the short way round the short way in pixels too.
      */
-    const pts = snake.map((s, i) => {
+    // Written into a buffer that persists across frames rather than mapped
+    // into a fresh array of fresh objects. At 60fps a long snake was
+    // allocating well over a thousand short-lived objects a second, and the
+    // collector that eventually reclaims them does so by stopping the world —
+    // on a phone, exactly the kind of pause that reads as the snake lurching.
+    const pts = this.ptsBuf
+    if (pts.length < len) {
+      while (pts.length < len) pts.push({ x: 0, y: 0 })
+    } else if (pts.length > len) {
+      pts.length = len
+    }
+    for (let i = 0; i < len; i++) {
+      const s = snake[i] as { x: number; y: number }
+      const out = pts[i] as { x: number; y: number }
       const p = prevSnake[i]
-      if (!p) return { x: cellCenter(s.x), y: cellCenter(s.y) }
+      if (!p) {
+        out.x = cellCenter(s.x)
+        out.y = cellCenter(s.y)
+        continue
+      }
       let ox = p.x
       let oy = p.y
       if (mode.wrap) {
@@ -368,8 +383,9 @@ export class Renderer {
       }
       const x = lerp(ox, s.x, alpha) * CELL + CELL / 2
       const y = lerp(oy, s.y, alpha) * CELL + CELL / 2
-      return mode.wrap ? { x: wrapPx(x), y: wrapPx(y) } : { x, y }
-    })
+      out.x = mode.wrap ? wrapPx(x) : x
+      out.y = mode.wrap ? wrapPx(y) : y
+    }
 
     // Nearest wrapped copy of `to`, relative to `from`.
     const nearest = (from: { x: number; y: number }, to: { x: number; y: number }) => ({
