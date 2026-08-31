@@ -46,7 +46,7 @@ The one remaining piece is the iOS **platform support package** (device symbols
 xcodebuild -downloadPlatform iOS      # or: Xcode → Settings → Components
 ```
 
-## Step 1 — run it locally
+## Step 1 — run it locally ✅ verified working
 
 ```bash
 npm run build && npx cap sync ios   # after ANY web change, always
@@ -57,7 +57,52 @@ In Xcode: pick a simulator (or your plugged-in iPhone) in the toolbar and
 press ▶. First run on a real device: Settings → General → VPN & Device
 Management → trust your developer certificate.
 
-## Step 2 — signing
+**Confirmed on 2026-08-31**: builds, installs, launches, and renders the menu
+correctly on an iPhone 16 Pro Max simulator (iOS 26.5), with the status-bar
+plugin responding and no JavaScript errors in the webview console.
+
+The simulator needs no signing at all, which makes it the fastest way to check
+a change end to end without touching certificates:
+
+```bash
+UDID=$(xcrun simctl create ScriptSnake com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro-Max \
+       "$(xcrun simctl list runtimes | grep -o 'com.apple.CoreSimulator.SimRuntime.iOS[^ ]*' | tail -1)")
+xcrun simctl boot "$UDID" && xcrun simctl bootstatus "$UDID" -b
+
+npm run build && npx cap sync ios
+cd ios/App && xcodebuild -project App.xcodeproj -target App \
+  -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+xcrun simctl install "$UDID" build/Debug-iphonesimulator/App.app
+xcrun simctl launch  "$UDID" com.yagsap.scriptsnake
+open -a Simulator                                  # to tap around
+xcrun simctl io "$UDID" screenshot shot.png        # 1320x2868, App Store size
+```
+
+Give the webview ~10 seconds after launch before screenshotting; a shot taken
+too early catches the blank background colour and looks like a failure when it
+is only still loading.
+
+To see JavaScript errors from inside the app (the webview has no visible
+console), turn on WebKit's console forwarding for the app and read the system
+log:
+
+```bash
+xcrun simctl spawn "$UDID" defaults write com.yagsap.scriptsnake \
+  WebKitDebugLogsPageMessagesToSystemConsoleEnabled -bool YES
+xcrun simctl spawn "$UDID" log stream --level debug | grep CONSOLE
+```
+
+## Step 2 — signing ⬅️ you are here
+
+The Apple Developer Program enrollment is active, but **Xcode is not signed
+into it on this Mac** — there are no signing identities in the keychain and no
+provisioning profiles, so no Team can be selected yet. That sign-in needs an
+Apple ID password and 2FA, so it has to be done by hand:
+
+**Xcode → Settings → Accounts → “+” → Apple ID → sign in.** Xcode then issues
+an Apple Development certificate automatically, and the Team becomes
+selectable below.
 
 Project navigator → **App** target → **Signing & Capabilities**:
 
