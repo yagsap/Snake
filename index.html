@@ -22,12 +22,20 @@
      only exists on coarse pointers, hence the bigger reserve there. */
   :root{--chrome-h:190px}
   @media (pointer:coarse){:root{--chrome-h:390px}}
-  html,body{margin:0;height:100%;overflow:hidden;background:var(--indigo);color:var(--washi);font-family:var(--mono);-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  /* touch-action:none on the whole page, not just the canvas.
+     Anywhere Safari has to decide whether a touch might become a scroll,
+     a pinch or a double-tap zoom, it runs gesture recognition against the
+     main thread and defers rendering while it waits. The page cannot
+     scroll or zoom by design, so nothing is lost by telling the browser
+     that up front. Scrollable overlays opt back in below. */
+  html,body{margin:0;height:100%;overflow:hidden;touch-action:none;background:var(--indigo);color:var(--washi);font-family:var(--mono);-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   body{height:100vh;height:100dvh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(14px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
   /* Phones: give the board nearly the full width — every pixel is play area. */
   @media (pointer:coarse){body{padding-left:calc(4px + env(safe-area-inset-left,0px));padding-right:calc(4px + env(safe-area-inset-right,0px))}}
   .scr{width:100%;max-width:520px;display:flex;flex-direction:column;gap:12px}
-  .ov{position:fixed;inset:0;z-index:10;background:rgba(28,37,65,.86);backdrop-filter:blur(3px);display:grid;place-items:center;overflow:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+  /* Overlays are the only things that scroll, so they opt back into
+     vertical panning; everything else stays gesture-free. */
+  .ov{position:fixed;inset:0;z-index:10;background:rgba(28,37,65,.86);backdrop-filter:blur(3px);display:grid;place-items:center;overflow:auto;touch-action:pan-y;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
   .ov[hidden]{display:none}
   .menu-card{width:min(92vw,340px);display:flex;flex-direction:column;gap:10px;background:var(--indigo-2);border:1px solid var(--grid);border-radius:14px;padding:18px 16px}
   h1{margin:0 0 2px;font:700 24px/1 var(--disp);letter-spacing:.02em;text-align:center}
@@ -78,7 +86,7 @@
   @media (pointer:coarse){.pad{display:grid}}
   kbd{border:1px solid var(--grid);border-radius:3px;padding:0 4px;font-family:inherit}
   .btn{background:transparent;border:1px solid var(--jade);border-radius:4px;color:var(--jade);font:500 12px var(--mono);padding:6px 10px;cursor:pointer}
-  .learn{position:fixed;inset:0;z-index:20;display:none;background:rgba(28,37,65,.92);backdrop-filter:blur(3px);overflow:auto;padding:calc(18px + env(safe-area-inset-top,0px)) 12px calc(40px + env(safe-area-inset-bottom,0px))}
+  .learn{position:fixed;inset:0;z-index:20;display:none;background:rgba(28,37,65,.92);backdrop-filter:blur(3px);overflow:auto;touch-action:pan-y;padding:calc(18px + env(safe-area-inset-top,0px)) 12px calc(40px + env(safe-area-inset-bottom,0px))}
   .learn.show{display:block}
   .learn .inner{max-width:520px;margin:0 auto}
   .learn .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}

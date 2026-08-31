@@ -724,13 +724,18 @@ armSpeechWarmup()
 
 // -------------------------------------------------------------------- loop --
 
+/** Start of our work this frame — update may run 0..N times before render. */
+let frameT0 = 0
 const loop = new GameLoop({
   update(dt) {
+    if (diag && !frameT0) frameT0 = performance.now()
     scenes.update(dt)
   },
   render(alpha, dt) {
+    if (diag && !frameT0) frameT0 = performance.now()
     scenes.render(alpha, dt)
-    diag?.frame()
+    diag?.frame(frameT0)
+    frameT0 = 0
   },
 })
 

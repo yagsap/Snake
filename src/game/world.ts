@@ -143,7 +143,8 @@ export class World {
     for (let i = 0; i < SNAKE.startLength; i++) {
       this.snake.push({ x: mid - i, y: mid, ch: '' })
     }
-    this.prevSnake = this.snake.map((s) => ({ ...s }))
+    this.prevSnake = []
+    this.snapshotPrev()
     this.input.reset('right')
     this.items = []
     this.score = 0
@@ -203,8 +204,28 @@ export class World {
     this.moveClock = phase * next
   }
 
+  /**
+   * Snapshot the body into the existing prevSnake array instead of mapping a
+   * new one. Cloning every segment on every move handed the collector a
+   * steady stream of short-lived objects, and it reclaims them by stopping
+   * the world — on a phone that pause is long enough to be seen.
+   */
+  private snapshotPrev(): void {
+    const p = this.prevSnake
+    const s = this.snake
+    while (p.length < s.length) p.push({ x: 0, y: 0, ch: '' })
+    if (p.length > s.length) p.length = s.length
+    for (let i = 0; i < s.length; i++) {
+      const a = p[i] as Segment
+      const b = s[i] as Segment
+      a.x = b.x
+      a.y = b.y
+      a.ch = b.ch
+    }
+  }
+
   private step(): void {
-    this.prevSnake = this.snake.map((s) => ({ ...s }))
+    this.snapshotPrev()
 
     const dir = this.input.consume()
     const v = DIR_VECTORS[dir]

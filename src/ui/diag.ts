@@ -37,6 +37,9 @@ export class Diag {
   /** TRUE frame gap, measured here — the loop's dt is clamped and would lie. */
   private worstFrame = 0
   private lastFrameAt = 0
+  /** Time spent inside our own update+render, as opposed to between frames. */
+  private worstWork = 0
+  private workTimes: number[] = []
 
   private worstMove = 0
   private moveStalls = 0
@@ -72,9 +75,20 @@ export class Diag {
     }
   }
 
-  /** Called once per rendered frame. Times itself; takes no dt on purpose. */
-  frame(): void {
+  /**
+   * Called at the end of every rendered frame. Times itself; the loop's dt is
+   * clamped and would understate a stall.
+   *
+   * `workStart` is when OUR code began this frame, which is the whole point:
+   * if work is small while the gap is huge, the time was not spent in this
+   * game at all and no amount of optimising it would help. That distinction
+   * is invisible from a frame counter alone.
+   */
+  frame(workStart: number): void {
     const now = performance.now()
+    const work = workStart ? now - workStart : 0
+    if (work > this.worstWork) this.worstWork = work
+    this.workTimes.push(work)
     if (this.lastFrameAt) {
       const gap = now - this.lastFrameAt
       this.fps++
@@ -153,12 +167,16 @@ export class Diag {
       .slice(0, 3)
       .map(([tag, [n, worst]]) => `${tag} ${n}x/${worst.toFixed(0)}ms`)
       .join('  ')
+    const w = this.workTimes.sort((a, b) => a - b)
+    const w95 = w[Math.floor(w.length * 0.95)] ?? 0
     this.el.textContent =
       `RENDER ${this.fps}fps p95 ${p95.toFixed(0)}ms worst ${this.worstFrame.toFixed(0)}ms long ${this.longFrames}\n` +
+      `OURCODE p95 ${w95.toFixed(1)}ms worst ${this.worstWork.toFixed(0)}ms\n` +
       `SIM    moves ${this.moves} stalls ${this.moveStalls} worst +${this.worstMove.toFixed(0)}ms\n` +
       `INPUT  turns ${this.turns} dropped ${this.turnsDropped} worst ${this.worstInput.toFixed(0)}ms\n` +
       `BLAME  ${top || '(nothing yet)'}`
     this.frameTimes = []
+    this.workTimes = []
     this.fps = 0
     this.since = performance.now()
   }
