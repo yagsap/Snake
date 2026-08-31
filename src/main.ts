@@ -29,7 +29,6 @@ import { MODES, type Mode } from './game/modes'
 import { comboMultiplier } from './game/progression'
 import { World } from './game/world'
 import { Renderer } from './render/renderer'
-import { HitStop } from './render/camera'
 import { Speech, Tones } from './ui/audio'
 import { Hud } from './ui/hud'
 import {
@@ -47,7 +46,6 @@ let table: CharTable = buildTable(data.lang, data.setName)
 const canvas = document.getElementById('c') as HTMLCanvasElement
 const renderer = new Renderer(canvas)
 renderer.setMotion(!data.reducedMotion)
-const hitStop = new HitStop()
 const speech = new Speech(data.lang, data.voices)
 const tones = new Tones()
 const hud = new Hud()
@@ -153,7 +151,6 @@ function makePlayScene(r: RunConfig): Scene {
       hud.setCueGlyph(r.reverse)
       hud.setWord(null, 0)
       renderer.reset()
-      hitStop.clear()
       tones.warmup() // we are inside the click that started the run
 
       const w = new World({
@@ -246,7 +243,6 @@ function makePlayScene(r: RunConfig): Scene {
           renderer.popWrong()
           renderer.camera.addTrauma(JUICE.traumaOnWrong)
           renderer.flash.fire(THEME.shu, 0.18)
-          hitStop.request(JUICE.hitStopWrong)
           haptic.wrong()
           tones.wrong()
           const v = DIR_VECTORS[w.input.current]
@@ -273,7 +269,6 @@ function makePlayScene(r: RunConfig): Scene {
         w.events.on('death', ({ score, eaten }) => {
           renderer.camera.addTrauma(JUICE.traumaOnDeath)
           renderer.flash.fire(THEME.shu, 0.3)
-          hitStop.request(JUICE.hitStopDeath)
           haptic.death()
           tones.death()
 
@@ -326,7 +321,6 @@ function makePlayScene(r: RunConfig): Scene {
     },
 
     update(dt) {
-      if (hitStop.active) return
       world?.update(dt)
     },
 
@@ -718,7 +712,6 @@ armSpeechWarmup()
 
 const loop = new GameLoop({
   update(dt) {
-    hitStop.update(dt)
     scenes.update(dt)
   },
   render(alpha, dt) {

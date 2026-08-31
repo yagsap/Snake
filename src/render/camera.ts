@@ -65,31 +65,19 @@ export class Camera {
 }
 
 /**
- * Hit-stop: hold the simulation still for a few real milliseconds on impact.
+ * Removed: hit-stop.
  *
- * The frame where something lands is the frame the player most wants to read,
- * and at 60 fps it is on screen for 16 ms. Freezing time briefly lets that
- * frame be seen, and the resumption reads as weight. It is applied as a global
- * time scale on the loop, so rendering — and therefore the shake and the
- * particles — keeps running through the freeze.
+ * It held the simulation still for ~110ms on a wrong bite, on the standard
+ * argument that freezing the frame of impact lets the player read it and
+ * reads as weight. That argument holds for a fighting game. It does not hold
+ * here, and measurement was unambiguous: every wrong bite produced a stall
+ * of ~100ms and nothing else ever did. At a 136ms move interval that made
+ * one move take 71% longer.
+ *
+ * The difference is that this snake is ALWAYS moving. Constant motion is the
+ * baseline the player's eye tracks, so an interruption of it does not read as
+ * emphasis — it reads as the game hanging. And the mistake is already
+ * unmissable without it: red flash, screen shake, the body washing to
+ * vermilion, a ring, debris, the correct answer printed for 1.6 seconds, a
+ * haptic thud and a sound. Nothing was lost by taking the freeze out.
  */
-export class HitStop {
-  private remaining = 0
-
-  request(seconds: number): void {
-    this.remaining = Math.max(this.remaining, seconds)
-  }
-
-  /** Advance using REAL time; hit-stop must not freeze its own countdown. */
-  update(realDt: number): void {
-    if (this.remaining > 0) this.remaining = Math.max(0, this.remaining - realDt)
-  }
-
-  get active(): boolean {
-    return this.remaining > 0
-  }
-
-  clear(): void {
-    this.remaining = 0
-  }
-}

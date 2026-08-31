@@ -94,14 +94,6 @@ export const JUICE = {
   /** Peak rotation in radians at trauma = 1. A little roll sells the impact. */
   shakeRotation: 0.035,
 
-  /**
-   * Hit-stop: freeze the simulation for a few real milliseconds on impact
-   * while rendering continues. It reads as weight — the frame the player is
-   * looking at is held still long enough to be seen.
-   */
-  hitStopWrong: 0.11,
-  hitStopDeath: 0.22,
-
   /** Squash-and-stretch on the head when eating. */
   eatPopDuration: 0.34,
   eatPopScale: 0.42,
