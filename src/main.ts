@@ -38,7 +38,7 @@ import {
   LevelEndView,
   MenuView,
 } from './ui/menus'
-import { haptic, initNativeChrome } from './ui/native'
+import { haptic, initNativeChrome, isNativeApp } from './ui/native'
 import { Diag } from './ui/diag'
 
 const data: SaveData = load()
@@ -721,6 +721,9 @@ function armSpeechWarmup(): void {
   addEventListener('keydown', fire, { once: true, capture: true })
 }
 armSpeechWarmup()
+// The native synthesizer has no user-activation requirement, so it can be
+// primed at boot rather than waiting for the first tap.
+if (isNativeApp) speech.warmup()
 
 // -------------------------------------------------------------------- loop --
 

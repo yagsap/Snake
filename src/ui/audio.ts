@@ -1,5 +1,5 @@
 import { LANGUAGES, type LangId } from '../data/scripts'
-import { isNativeApp, nativeSpeak } from './native'
+import { isNativeApp, nativeSpeak, nativeWarmup } from './native'
 
 /**
  * Speech (the cue) and synthesised tones (the feedback).
@@ -93,8 +93,14 @@ export class Speech {
    * The language's own word for "snake" is short, always valid, and silent.
    */
   warmup(): void {
-    // The native synthesizer runs off the webview thread — nothing to warm.
-    if (isNativeApp) return
+    if (isNativeApp) {
+      // Warm the native engine instead — measured as the single largest
+      // frame cost in the app until it was primed. Once per language.
+      if (this.warmedVoice === `native:${this.lang}`) return
+      this.warmedVoice = `native:${this.lang}`
+      nativeWarmup(this.lang)
+      return
+    }
     const voice = this.voice
     if (!voice || this.warmedVoice === voice.name) return
     this.warmedVoice = voice.name

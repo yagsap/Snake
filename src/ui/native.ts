@@ -56,6 +56,20 @@ export const haptic = {
 }
 
 /**
+ * Prime AVSpeechSynthesizer with a silent utterance.
+ *
+ * The native engine was assumed to be free because it renders audio off the
+ * webview thread — but profiling the app in the simulator showed the cue
+ * blamed for the three longest frames of a run, the worst at 287ms. Loading a
+ * voice is main-thread work on this side of the bridge too, so it gets the
+ * same treatment as the web engine: pay for it once, up front, in silence.
+ */
+export function nativeWarmup(lang: LangId): void {
+  if (!isNativeApp) return
+  nativeSpeak('a', lang, 0)
+}
+
+/**
  * Native text-to-speech fallback.
  *
  * WKWebView's window.speechSynthesis has a history of shipping with an empty
@@ -64,14 +78,17 @@ export const haptic = {
  * entire game, so it gets a second engine. Returns false when unavailable so
  * the caller knows the cue stayed silent.
  */
-export function nativeSpeak(text: string, lang: LangId): boolean {
+export function nativeSpeak(text: string, lang: LangId, volume = 1): boolean {
   if (!isNativeApp || !text) return false
   void TextToSpeech.stop()
     .catch(() => {})
     .then(() =>
-      TextToSpeech.speak({ text, lang: TTS_LANG[lang], rate: 0.9 }).catch(
-        () => {},
-      ),
+      TextToSpeech.speak({
+        text,
+        lang: TTS_LANG[lang],
+        rate: 0.9,
+        volume,
+      }).catch(() => {}),
     )
   return true
 }
