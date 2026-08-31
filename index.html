@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Script Snake</title>
+<!-- Added to the Home Screen, the game runs standalone: no URL bar, no
+     toolbar, and therefore none of the browser chrome whose gesture handling
+     and viewport changes showed up as stalls in the on-device profile. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Script Snake">
+<meta name="theme-color" content="#1C2541">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Noto+Sans+Devanagari:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -29,7 +40,13 @@
      scroll or zoom by design, so nothing is lost by telling the browser
      that up front. Scrollable overlays opt back in below. */
   html,body{margin:0;height:100%;overflow:hidden;touch-action:none;background:var(--indigo);color:var(--washi);font-family:var(--mono);-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-  body{height:100vh;height:100dvh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(14px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
+  /* svh, NOT dvh. The dynamic unit tracks Safari's toolbars as they move,
+     and every change relayouts the page and re-rasterises the canvas layer
+     mid-run — expensive, and triggered by touch, which is exactly what the
+     on-device profile blamed. svh is the stable small-viewport height: it
+     never changes, so nothing relayouts, and content always fits whether the
+     toolbars are shown or hidden. */
+  body{height:100vh;height:100svh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:calc(14px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
   /* Phones: give the board nearly the full width — every pixel is play area. */
   @media (pointer:coarse){body{padding-left:calc(4px + env(safe-area-inset-left,0px));padding-right:calc(4px + env(safe-area-inset-right,0px))}}
   .scr{width:100%;max-width:520px;display:flex;flex-direction:column;gap:12px}
@@ -75,7 +92,7 @@
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(230,59,46,.55)}100%{box-shadow:0 0 0 18px rgba(230,59,46,0)}}
   .seal small{position:absolute;bottom:2px;font:400 8px var(--mono);letter-spacing:.1em;color:var(--shu-soft)}
   .seal.hidden-cue{font-size:24px}
-  canvas{width:min(100%,calc(100vh - var(--chrome-h)));width:min(100%,calc(100dvh - var(--chrome-h)));max-width:520px;aspect-ratio:1;align-self:center;background:var(--indigo);border:1px solid var(--grid);border-radius:8px;touch-action:none;display:block;box-shadow:0 18px 40px -20px rgba(0,0,0,.7)}
+  canvas{width:min(100%,calc(100vh - var(--chrome-h)));width:min(100%,calc(100svh - var(--chrome-h)));max-width:520px;aspect-ratio:1;align-self:center;background:var(--indigo);border:1px solid var(--grid);border-radius:8px;touch-action:none;display:block;box-shadow:0 18px 40px -20px rgba(0,0,0,.7)}
   .pad{display:none;grid-template-columns:repeat(3,86px);grid-template-rows:repeat(2,74px);gap:16px;margin:14px auto 0}
   .pad button{background:var(--indigo-2);border:1px solid var(--grid);border-radius:14px;color:var(--washi);font-size:32px;touch-action:none}
   .pad button:active{background:var(--grid)}
