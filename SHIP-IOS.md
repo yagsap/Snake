@@ -16,30 +16,35 @@ is fully offline on device. This guide is the path from this repo to the store.
   be asked the export-compliance question on every upload.
 - Privacy policy page: https://yagsap.github.io/Snake/privacy.html
   (deployed with the site; App Store Connect requires this URL).
+- Version `1.0`, build `1`, deployment target iOS 15, automatic signing.
+  The only unset field is the signing **Team**, which is yours to pick.
 
-## Step 0 — toolchain (one-time) ⚠️ do this first
+Content, for the store listing: **seven writing systems** — English, Japanese
+(hiragana, katakana, and the voiced rows), Chinese (HSK-1 hanzi), Russian,
+Hindi, Korean (jamo and syllables) and Greek — across **130 campaign levels**,
+plus endless play and a daily seeded challenge.
 
-Your Mac currently has **Xcode 15.4** on **macOS 14 (Sonoma)**. That cannot
-ship this app, for two independent reasons, both verified against Apple's and
-Capacitor's official docs (August 2026):
+## Step 0 — toolchain ✅ done
 
-1. **Since April 28, 2026, Apple only accepts uploads built with Xcode 26+**
-   (iOS 26 SDK) — Xcode 15/16 builds are rejected at upload.
-2. **Capacitor 8 itself requires Xcode 26+** to build.
+This was the long pole and it is cleared. As of 2026-08-31 the Mac runs
+**macOS 26** with **Xcode 26.6 (build 17F113)** and the **iOS 26.5 SDK**, which
+is what Apple has required for uploads since 2026-04-28 and what Capacitor 8
+requires to build at all. The Xcode licence is accepted (`sudo xcodebuild
+-license accept`) — until it was, even `git` refused to run, since the only
+`git` on this machine is Xcode's.
 
-Xcode 26 does not run on Sonoma. Your machine is an **M1 MacBook Air, which
-supports the latest macOS**, so the path is simply:
+**Verified, not assumed**: `xcodebuild` compiles every Swift target — Capacitor
+8.5.0, the Haptics, StatusBar and TextToSpeech plugins, and the app itself —
+against the iOS 26.5 SDK, with Swift Package Manager resolving cleanly and no
+CocoaPods anywhere.
 
-1. **Update macOS** (System Settings → General → Software Update) — to
-   macOS Tahoe 26.2 or later (recommended: latest). Minimum viable is
-   Sequoia 15.6, which caps you at Xcode 26.0–26.3.
-2. **Install Xcode 26** from the Mac App Store (large download; the update
-   replaces 15.4).
-3. Open Xcode once — let it install its iOS platform + Simulator when it
-   asks (or run `xcodebuild -downloadPlatform iOS`).
+The one remaining piece is the iOS **platform support package** (device symbols
++ Simulator runtime, ~7 GB), without which storyboard compilation fails with
+`iOS 26.5 Platform Not Installed`:
 
-Don't bother downloading the iOS platform for Xcode 15.4 in the meantime —
-it can't build a Capacitor 8 project, so that 7 GB would be wasted.
+```bash
+xcodebuild -downloadPlatform iOS      # or: Xcode → Settings → Components
+```
 
 ## Step 1 — run it locally
 
@@ -111,9 +116,11 @@ Internal Testing → add yourself) and play a few runs before submitting.
 App Store Connect → your app → the version page → select the build →
 **Add for Review** → **Submit**. In *App Review Information*, add a note:
 
-> Fully offline educational game teaching character recognition for Japanese
-> kana, Chinese hanzi, Cyrillic, and Devanagari. No account, no network use.
-> Audio: character pronunciations via the system text-to-speech engine.
+> Fully offline educational game teaching character recognition across seven
+> writing systems: the English alphabet, Japanese kana, Chinese hanzi,
+> Cyrillic, Devanagari, Hangul and Greek. No account, no network use, no data
+> collected. Audio: character pronunciations via the system text-to-speech
+> engine (AVSpeechSynthesizer).
 
 Typical review time is 1–2 days. Common first-app rejections and their
 answers, should they come up:
