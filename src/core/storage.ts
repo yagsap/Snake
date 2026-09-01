@@ -47,6 +47,9 @@ export interface SaveData {
   /** Has this player answered "what do you want to learn?". Gates the
    *  first-launch flow that drops a new player straight into level 1. */
   onboarded: boolean
+  /** Show the on-screen arrow buttons. Off by default — drag-steering is the
+   *  hero control; the buttons remain as an accessibility option. */
+  showPad: boolean
 }
 
 const defaults = (): SaveData => ({
@@ -62,6 +65,7 @@ const defaults = (): SaveData => ({
   showRomaji: true,
   reducedMotion: false,
   onboarded: false,
+  showPad: false,
 })
 
 const num = (v: unknown, fallback = 0): number =>
@@ -141,6 +145,7 @@ export function load(): SaveData {
       bool(d['onboarded'], false) ||
       Object.keys(parseStats(d['stats'])).length > 0 ||
       Math.max(0, num(d['bestScore'])) > 0,
+    showPad: bool(d['showPad'], false),
   }
 }
 

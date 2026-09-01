@@ -102,6 +102,12 @@ export interface InputHandlers {
   isBlocked(): boolean
   /** Optional probe, called the moment a raw device event arrives. */
   onRawInput?(): void
+  /**
+   * Optional drag-steering visual. `start` and `turn` carry the CURRENT
+   * anchor — the floating origin that re-anchors as each turn commits — so
+   * a view can show the "stick" where the gesture actually measures from.
+   */
+  onDrag?(phase: 'start' | 'turn' | 'end', x: number, y: number, dir?: Dir): void
 }
 
 /**
@@ -191,6 +197,7 @@ export function bindInput(
     anchorY = e.clientY
     swiped = false
     lastDir = null
+    if (!handlers.isBlocked()) handlers.onDrag?.('start', anchorX, anchorY)
     // Capture the pointer so moves and the matching pointerup reach this
     // surface even when the finger leaves it — fast swipes routinely end
     // off-canvas, and without capture those swipes were silently dropped.
@@ -215,19 +222,24 @@ export function bindInput(
     if (dir === lastDir) return // already asked for this on this drag
     lastDir = dir
     handlers.onRawInput?.()
+    handlers.onDrag?.('turn', anchorX, anchorY, dir)
     handlers.onTurn(dir)
   }
 
   const onPointerUp = (e: PointerEvent) => {
     if (e.pointerId !== activeId) return
     activeId = null
+    handlers.onDrag?.('end', e.clientX, e.clientY)
     if (handlers.isBlocked() || swiped) return
     // Never moved far enough to be a swipe: this was a tap (replay the cue).
     handlers.onAction('tap')
   }
 
   const onPointerCancel = (e: PointerEvent) => {
-    if (e.pointerId === activeId) activeId = null
+    if (e.pointerId === activeId) {
+      activeId = null
+      handlers.onDrag?.('end', e.clientX, e.clientY)
+    }
   }
 
   surface.addEventListener('pointerdown', onPointerDown)

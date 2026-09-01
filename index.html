@@ -31,8 +31,15 @@
   /* Vertical space reserved around the board (HUD, buttons, padding) — the
      board shrinks to fit what's left so the PAGE never scrolls. The d-pad
      only exists on coarse pointers, hence the bigger reserve there. */
+  /* Drag-steering is the hero control; the arrow pad is an opt-in
+     accessibility setting (body.show-pad). Hiding it hands its ~190px of
+     vertical space back to the board on small phones. */
   :root{--chrome-h:190px}
-  @media (pointer:coarse){:root{--chrome-h:390px}}
+  @media (pointer:coarse){
+    :root{--chrome-h:200px}
+    body.show-pad{--chrome-h:390px}
+    body.show-pad .pad{display:grid}
+  }
   /* touch-action:none on the whole page, not just the canvas.
      Anywhere Safari has to decide whether a touch might become a scroll,
      a pinch or a double-tap zoom, it runs gesture recognition against the
@@ -100,7 +107,12 @@
   .pad button:nth-child(2){grid-column:1;grid-row:2}
   .pad button:nth-child(3){grid-column:2;grid-row:2}
   .pad button:nth-child(4){grid-column:3;grid-row:2}
-  @media (pointer:coarse){.pad{display:grid}}
+  /* The floating drag origin: appears where the finger lands, re-anchors as
+     each turn commits, kicks toward the committed direction — the tactile
+     feedback of a joystick with none of a joystick's angular ambiguity. */
+  #dragGlow{position:fixed;z-index:5;left:0;top:0;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;pointer-events:none;border:2px solid rgba(154,209,178,.55);background:radial-gradient(closest-side,rgba(154,209,178,.18),transparent 70%);opacity:0;transition:opacity .15s}
+  #dragGlow.on{opacity:1}
+  #dragGlow .kick{position:absolute;inset:14px;border-radius:50%;background:rgba(215,240,224,.5);transition:transform .09s ease-out;transform:scale(.55)}
   kbd{border:1px solid var(--grid);border-radius:3px;padding:0 4px;font-family:inherit}
   .btn{background:transparent;border:1px solid var(--jade);border-radius:4px;color:var(--jade);font:500 12px var(--mono);padding:6px 10px;cursor:pointer}
   .learn{position:fixed;inset:0;z-index:20;display:none;background:rgba(28,37,65,.92);backdrop-filter:blur(3px);overflow:auto;touch-action:pan-y;padding:calc(18px + env(safe-area-inset-top,0px)) 12px calc(40px + env(safe-area-inset-bottom,0px))}
@@ -177,7 +189,7 @@
     <button class="ghost" id="dailyBtn" style="flex:1">Daily run</button>
   </div>
   <button class="ghost" id="menuLearnBtn">Learn the characters</button>
-  <p class="hint">swipe or arrows to steer · eat the character you hear · wrong bites cost a segment<br>answer fast for bonus points · <kbd>space</kbd> replays the sound</p>
+  <p class="hint">drag anywhere to steer · eat the character you hear · wrong bites cost a segment<br>answer fast for bonus points · <kbd>space</kbd> replays the sound</p>
 </div></div>
 
 <div class="scr" id="playScr" hidden>
@@ -198,6 +210,9 @@
   <div class="pad" aria-label="Direction pad">
     <button data-dir="up" aria-label="Up">↑</button><button data-dir="left" aria-label="Left">←</button><button data-dir="down" aria-label="Down">↓</button><button data-dir="right" aria-label="Right">→</button>
   </div>
+</div>
+
+<div id="dragGlow"><div class="kick"></div>
 </div>
 
 <div class="ov" id="overScr" hidden><div class="over-card">
@@ -238,6 +253,7 @@
       <label>voice <select id="voiceSel" aria-label="Voice"></select></label>
       <label><input type="checkbox" id="showSnd"> show the sound during play</label>
       <label><input type="checkbox" id="reduceMotion"> reduce motion (no shake or particles)</label>
+      <label><input type="checkbox" id="showPad"> show arrow buttons</label>
     </div>
   </div>
 </div>

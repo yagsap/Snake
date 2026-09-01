@@ -194,6 +194,7 @@ export interface ChartCallbacks {
   onVoice(name: string): void
   onShowRomaji(show: boolean): void
   onReducedMotion(reduced: boolean): void
+  onShowPad(show: boolean): void
 }
 
 export class ChartView {
@@ -221,6 +222,9 @@ export class ChartView {
     $<HTMLInputElement>('reduceMotion').addEventListener('change', (e) =>
       cb.onReducedMotion((e.target as HTMLInputElement).checked),
     )
+    $<HTMLInputElement>('showPad').addEventListener('change', (e) =>
+      cb.onShowPad((e.target as HTMLInputElement).checked),
+    )
   }
 
   private lastRender: (() => void) | null = null
@@ -242,6 +246,7 @@ export class ChartView {
   syncSettings(data: SaveData): void {
     $<HTMLInputElement>('showSnd').checked = data.showRomaji
     $<HTMLInputElement>('reduceMotion').checked = data.reducedMotion
+    $<HTMLInputElement>('showPad').checked = data.showPad
   }
 
   setVoices(

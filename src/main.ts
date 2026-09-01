@@ -364,6 +364,15 @@ function makePlayScene(r: RunConfig): Scene {
       diag?.resetRun()
       w.reset()
       loop.resync()
+
+      // A brand-new player has never steered before; say how, where they
+      // are already looking. One line, gone in seconds, never repeats.
+      if (Object.keys(data.stats).length === 0) {
+        renderer.fx.text(
+          BOARD.size / 2, BOARD.size * 0.68,
+          'drag anywhere to steer', THEME.washi, 4, 17,
+        )
+      }
     },
 
     exit() {
@@ -715,7 +724,17 @@ const chartView = new ChartView({
     renderer.setMotion(!reduced)
     save(data)
   },
+  onShowPad(show) {
+    data.showPad = show
+    applyPadSetting()
+    save(data)
+  },
 })
+
+/** The pad is CSS-gated on a body class so layout reflows with it. */
+function applyPadSetting(): void {
+  document.body.classList.toggle('show-pad', data.showPad)
+}
 
 const gameOverView = new GameOverView(
   () => {
@@ -775,6 +794,25 @@ bindInput(canvas, {
     }
   },
   onRawInput: () => diag?.input(),
+  onDrag(phase, x, y, dir) {
+    const glow = document.getElementById('dragGlow')
+    const kick = glow?.firstElementChild as HTMLElement | null
+    if (!glow || !kick) return
+    if (phase === 'end') {
+      glow.classList.remove('on')
+      return
+    }
+    glow.style.left = `${x}px`
+    glow.style.top = `${y}px`
+    glow.classList.add('on')
+    if (phase === 'turn' && dir) {
+      const v = DIR_VECTORS[dir]
+      kick.style.transform = `translate(${v.x * 12}px, ${v.y * 12}px) scale(.8)`
+      setTimeout(() => {
+        kick.style.transform = 'scale(.55)'
+      }, 90)
+    }
+  },
   isBlocked: () => {
     // 'pause' stays unblocked so space/tap can replay the cue — a paused
     // screen is exactly where a learner studies the sound. Turns are still
@@ -872,6 +910,7 @@ const loop = new GameLoop({
 })
 
 initNativeChrome()
+applyPadSetting()
 chartView.syncSettings(data)
 hud.setSealHidden(!data.showRomaji && !!speech.current)
 syncVoices()
