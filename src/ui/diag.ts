@@ -46,7 +46,7 @@ export interface DiagSwitches {
 export class Diag {
   /** Opt-in only: ?debug on the URL. Costs nothing when off. */
   static get enabled(): boolean {
-    return true // TEMPORARY on-device diagnostic build
+    return /[?&]debug\b/.test(location.search)
   }
 
   private el: HTMLElement
