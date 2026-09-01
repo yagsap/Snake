@@ -1,5 +1,5 @@
 import type { SaveData } from '../core/storage'
-import { CAMPAIGNS, KIND_LABEL, type LevelSpec } from '../game/levels'
+import { CAMPAIGNS, KIND_LABEL, dateKey, type LevelSpec } from '../game/levels'
 import {
   LANGUAGES,
   LANG_IDS,
@@ -97,6 +97,12 @@ export class MenuView {
     const cleared = levels.filter((l) => data.campaign[l.id]?.cleared).length
     $('campBtn').textContent =
       cleared > 0 ? `Levels · ${cleared}/${levels.length}` : 'Levels'
+
+    // Today's daily already played: the button wears the score. An unplayed
+    // daily stays a plain invitation.
+    const daily = data.daily
+    $('dailyBtn').textContent =
+      daily && daily.date === dateKey() ? `Daily · ${daily.best}` : 'Daily run'
   }
 }
 
@@ -319,21 +325,37 @@ export interface GameOverStats {
   missed: Array<{ ch: string; sound: string }>
   /** The learning receipt line — what this run was actually FOR. */
   receipt: string
+  /** Offer the share button (daily runs only — those are comparable). */
+  share: boolean
 }
 
 export class GameOverView {
   private root = $('overScr')
+  private shareBtn = $('shareBtn')
 
-  constructor(onAgain: () => void, onMenu: () => void, onSpeak: (ch: string) => void) {
+  constructor(
+    onAgain: () => void,
+    onMenu: () => void,
+    onSpeak: (ch: string) => void,
+    onShare: () => void,
+  ) {
     $('againBtn').addEventListener('click', onAgain)
     $('overMenuBtn').addEventListener('click', onMenu)
+    this.shareBtn.addEventListener('click', () => onShare())
     this.root.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-say]')
       if (el) onSpeak(el.dataset.say as string)
     })
   }
 
+  /** Clipboard-path feedback: relabel the share button ("copied ✓"). */
+  noteShared(label: string): void {
+    this.shareBtn.textContent = label
+  }
+
   show(stats: GameOverStats): void {
+    this.shareBtn.hidden = !stats.share
+    this.shareBtn.textContent = 'share result'
     $('overScore').textContent = String(stats.score)
     $('overRecord').textContent = stats.isRecord ? 'new best!' : ''
     $('overDetail').textContent =

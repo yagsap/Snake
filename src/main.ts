@@ -161,6 +161,14 @@ function runReceipt(w: World): string {
     return s && !isMastered(s) && hitsToMaster(s) <= 2
   }).length
   if (close) parts.push(`${close} close to mastery`)
+  // The nemesis line: the pair this run kept mixing up, named as a PAIR.
+  // "you missed き" says study き; "you mix up き and さ" says the actual
+  // problem — and the spawner is already acting on it (chooseDistractors).
+  const nemesis = [...w.runConfused.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (nemesis && nemesis[1] >= 2) {
+    const [a, b] = nemesis[0].split('→')
+    parts.push(`you mix up ${a} and ${b}`)
+  }
   return parts.join(' · ')
 }
 
@@ -177,8 +185,15 @@ const goalText = (r: RunConfig, w: World): string => {
  * created in enter(), disposed in exit(), so a quit run cannot leave handlers
  * firing into dead UI.
  */
+/** Wake ripple colours — THEME.jade as a wash. Trail is barely-there; the
+ *  plunk of a landing tile is allowed to be noticed. */
+const WAKE_TRAIL = 'rgba(154,209,178,.13)'
+const WAKE_PLUNK = 'rgba(154,209,178,.25)'
+
 function makePlayScene(r: RunConfig): Scene {
   const disposers: Array<() => void> = []
+  /** Daily runs only: one emoji per bite, the shareable shape of the run. */
+  const tape: string[] = []
 
   return {
     name: 'play',
@@ -200,6 +215,9 @@ function makePlayScene(r: RunConfig): Scene {
         ...(r.obstacles ? { obstacles: r.obstacles } : {}),
         reverse: r.reverse,
         ...(r.seed !== undefined ? { seed: r.seed } : {}),
+        // The daily is the same test for everyone: selection must not read
+        // this player's history. (It is still recorded — see WorldOptions.)
+        ...(r.daily ? { neutral: true } : {}),
       })
       world = w
 
@@ -224,9 +242,26 @@ function makePlayScene(r: RunConfig): Scene {
           showCue(target, sound)
           if (r.words && w.word) hud.setWord(w.word.w, 0)
           hud.setGoal(goalText(r, w))
+          // Each newly-landed tile plunks into the water.
+          for (const it of w.items) {
+            renderer.wake.ring(
+              it.x * CELL + CELL / 2, it.y * CELL + CELL / 2,
+              WAKE_PLUNK, 0.9, CELL * 1.3,
+            )
+          }
         }),
 
-        w.events.on('moved', () => diag?.move(w.interval)),
+        w.events.on('moved', () => {
+          diag?.move(w.interval)
+          // The wake: the cell the head just vacated ripples behind it.
+          const p = w.prevSnake[0]
+          if (p) {
+            renderer.wake.ring(
+              p.x * CELL + CELL / 2, p.y * CELL + CELL / 2,
+              WAKE_TRAIL, 0.7, CELL * 0.8,
+            )
+          }
+        }),
 
         // The game's biggest moment: a character joined the player for good.
         w.events.on('mastered', ({ item, ch }) => {
@@ -259,6 +294,7 @@ function makePlayScene(r: RunConfig): Scene {
 
         w.events.on('eat', ({ item, award, streak, score }) => {
           diag?.mark('eat')
+          if (r.daily) tape.push('🟩')
           const c = renderer.centerOf(item)
           const wasMult = comboMultiplier(streak - 1)
           const isMult = comboMultiplier(streak)
@@ -291,6 +327,7 @@ function makePlayScene(r: RunConfig): Scene {
         }),
 
         w.events.on('wrong', ({ item, target, targetSound }) => {
+          if (r.daily) tape.push('🟥')
           const c = renderer.centerOf(item)
           hud.setStreak(0)
           hud.setGoal(goalText(r, w))
@@ -346,6 +383,7 @@ function makePlayScene(r: RunConfig): Scene {
               data.daily = { date: today, best: score }
             }
           }
+          lastDailyShare = r.daily ? dailyShareText(w, tape) : null
           save(data)
 
           // Let the death sink in before the card. The timer is owned by this
@@ -515,6 +553,7 @@ function makeGameOverScene(isRecord: boolean, r: RunConfig): Scene {
         isRecord,
         missed,
         receipt: runReceipt(w),
+        share: !!lastDailyShare,
       })
     },
     exit() {
@@ -744,7 +783,56 @@ const gameOverView = new GameOverView(
     scenes.replaceAll(makeMenuScene(runSummary()))
   },
   (ch) => speech.speak(ch),
+  () => void shareDailyResult(),
 )
+
+/** The finished daily's share text, rebuilt on every daily death. */
+let lastDailyShare: string | null = null
+
+/**
+ * The shareable receipt of a daily run. Everyone on today's seed faced the
+ * SAME questions in the same order (the neutral deck guarantees it), which
+ * is what makes the numbers comparable and the tape worth reading — the
+ * Wordle contract, honoured for real.
+ */
+function dailyShareText(w: World, tape: readonly string[]): string {
+  const rows: string[] = []
+  for (let i = 0; i < tape.length && i < 30; i += 10) {
+    rows.push(tape.slice(i, i + 10).join(''))
+  }
+  if (tape.length > 30) rows.push(`… ${tape.length} bites in all`)
+  return [
+    `Script Snake daily · ${dateKey()}`,
+    `${LANGUAGES[data.lang].name} ${data.setName} · ${w.score} pts · ` +
+      `${w.eaten} eaten · best streak ${w.bestStreak}`,
+    ...rows,
+    'https://yagsap.github.io/Snake/',
+  ].join('\n')
+}
+
+/**
+ * navigator.share where the OS puts up a sheet — the sheet is its own
+ * feedback, and the user dismissing it is an answer, not an error. Clipboard
+ * on desktop, with the button relabelled as the confirmation.
+ */
+async function shareDailyResult(): Promise<void> {
+  const text = lastDailyShare
+  if (!text) return
+  if (navigator.share) {
+    try {
+      await navigator.share({ text })
+    } catch {
+      /* sheet dismissed */
+    }
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    gameOverView.noteShared('copied ✓')
+  } catch {
+    /* no clipboard either — leave the button as it is */
+  }
+}
 
 function runSummary(): string | undefined {
   return world ? `run: ${world.score} · ${menuResultLine()}` : undefined

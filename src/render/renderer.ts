@@ -1,5 +1,6 @@
 import { BOARD, CELL, FONTS, JUICE, THEME } from '../game/config'
 import { SCORING } from '../game/config'
+import type { Dir } from '../core/input'
 import type { Item, World } from '../game/world'
 import { clamp01, countdown, easeOutBack, easeOutCubic, lerp } from '../core/time'
 import { speedBonusFactor } from '../game/progression'
@@ -127,6 +128,16 @@ function mixHex(a: string, b: string, t: number): string {
   ).join('')}`
 }
 
+/** Fixed angle of a grid direction — the heading fallback for the one frame
+ *  where the neck vector degenerates (spawn, or a wrap seam edge case). */
+const DIR_ANGLE: Readonly<Record<Dir, number>> = {
+  right: 0,
+  down: Math.PI / 2,
+  left: Math.PI,
+  up: -Math.PI / 2,
+}
+const dirAngle = (dir: Dir): number => DIR_ANGLE[dir]
+
 export interface RenderOptions {
   /** Draw the pause veil over the board. */
   paused: boolean
@@ -137,6 +148,12 @@ export interface RenderOptions {
 export class Renderer {
   readonly camera = new Camera()
   readonly fx = new FxSystem()
+  /** Water ripples, drawn UNDER the board contents: the snake's wake and the
+   *  plunk of arriving tiles disturb the seigaiha field, so the "water" the
+   *  art claims is there behaves like it. Fed by the composition root off
+   *  world events; a second FxSystem so reduced motion silences it the same
+   *  way as everything else. */
+  readonly wake = new FxSystem()
   readonly flash = new Flash()
 
   private ctx: CanvasRenderingContext2D
@@ -158,6 +175,8 @@ export class Renderer {
   private ptsBuf: Array<{ x: number; y: number }> = []
   /** Reused wrap-mirror buffer, flat x,y pairs; see drawSnake. */
   private mirrorBuf: number[] = []
+  /** Reused spline-segment buffer, six numbers per stroke; see drawSnake. */
+  private segBuf: number[] = []
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
@@ -212,11 +231,13 @@ export class Renderer {
     const v = enabled ? 1 : 0
     this.camera.intensity = v
     this.fx.intensity = v
+    this.wake.intensity = v
     this.flash.intensity = v
   }
 
   reset(): void {
     this.fx.clear()
+    this.wake.clear()
     this.flash.clear()
     this.camera.reset()
     this.eatPop = 0
@@ -241,6 +262,7 @@ export class Renderer {
     this.clock += realDt
     this.camera.update(realDt)
     this.fx.update(realDt)
+    this.wake.update(realDt)
     this.flash.update(realDt)
     this.eatPop = countdown(this.eatPop, realDt / JUICE.eatPopDuration)
     this.recoil = countdown(this.recoil, realDt / 0.45)
@@ -258,6 +280,8 @@ export class Renderer {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
+    // Ripples first: water is under everything that floats on it.
+    this.wake.draw(ctx)
     if (!world.mode.wrap) drawWalls(ctx, this.dangerNear(world))
     this.drawObstacles(world)
     this.drawItems(world)
@@ -441,31 +465,81 @@ export class Renderer {
       out.y = mode.wrap ? wrapPx(y) : y
     }
 
-    // Nearest wrapped copy of `to`, relative to `from`.
-    const nearest = (from: { x: number; y: number }, to: { x: number; y: number }) => ({
-      x: to.x - from.x > W / 2 ? to.x - W : from.x - to.x > W / 2 ? to.x + W : to.x,
-      y: to.y - from.y > W / 2 ? to.y - W : from.y - to.y > W / 2 ? to.y + W : to.y,
-    })
+    // Nearest wrapped copy of coordinate `b`, as seen from `a`.
+    const near = (a: number, b: number): number =>
+      b - a > W / 2 ? b - W : a - b > W / 2 ? b + W : b
 
-    /** Draw one body link, splitting it into two strokes across a wrap seam. */
-    const link = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-      if (!mode.wrap || Math.hypot(a.x - b.x, a.y - b.y) <= CELL * 1.6) {
-        ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        ctx.lineTo(b.x, b.y)
-        ctx.stroke()
-        return
+    /**
+     * Spline geometry, built once per frame and stroked twice (body, then
+     * specular). Straight strokes between grid points gave the body a visible
+     * elbow at every turn — a chain of capsules, not a creature. The classic
+     * midpoint construction fixes it: each interior point contributes one
+     * quadratic, from the midpoint behind it to the midpoint ahead, with the
+     * point itself as control. Consecutive strokes share their endpoints, so
+     * the chain is a single smooth curve, and per-stroke width/colour keeps
+     * the taper and gradient the old per-link version had.
+     *
+     * Wrap seams: each stroke's neighbours are pulled to their nearest
+     * wrapped copies first, so the curve is locally continuous; a stroke
+     * that then hangs off the board is re-drawn shifted by ±W (strokeSeg).
+     *
+     * Written tail-first into a flat reused buffer — six numbers per stroke,
+     * no per-frame allocation — so both passes replay identical geometry.
+     */
+    const segs = this.segBuf
+    for (let j = len - 1; j >= 0; j--) {
+      const o = (len - 1 - j) * 6
+      const p = pts[j] as { x: number; y: number }
+      if (j > 0 && j < len - 1) {
+        // Interior: midpoint-to-midpoint quadratic through the point.
+        const a = pts[j + 1] as { x: number; y: number }
+        const b = pts[j - 1] as { x: number; y: number }
+        segs[o] = (p.x + near(p.x, a.x)) / 2
+        segs[o + 1] = (p.y + near(p.y, a.y)) / 2
+        segs[o + 2] = p.x
+        segs[o + 3] = p.y
+        segs[o + 4] = (p.x + near(p.x, b.x)) / 2
+        segs[o + 5] = (p.y + near(p.y, b.y)) / 2
+      } else {
+        // End caps: half a link, straight (control point on the line), from
+        // the tail tip / head centre to the first shared midpoint.
+        const q = pts[j === 0 ? 1 : j - 1] ?? p
+        const mx = (p.x + near(p.x, q.x)) / 2
+        const my = (p.y + near(p.y, q.y)) / 2
+        segs[o] = j === 0 ? mx : p.x
+        segs[o + 1] = j === 0 ? my : p.y
+        segs[o + 4] = j === 0 ? p.x : mx
+        segs[o + 5] = j === 0 ? p.y : my
+        segs[o + 2] = ((segs[o] as number) + (segs[o + 4] as number)) / 2
+        segs[o + 3] = ((segs[o + 1] as number) + (segs[o + 5] as number)) / 2
       }
-      const b2 = nearest(a, b)
-      ctx.beginPath()
-      ctx.moveTo(a.x, a.y)
-      ctx.lineTo(b2.x, b2.y)
-      ctx.stroke()
-      const a2 = nearest(b, a)
-      ctx.beginPath()
-      ctx.moveTo(b.x, b.y)
-      ctx.lineTo(a2.x, a2.y)
-      ctx.stroke()
+    }
+
+    /** Stroke stored segment k, plus wrapped copies where it leaves the board. */
+    const strokeSeg = (k: number): void => {
+      const o = k * 6
+      const x1 = segs[o] as number
+      const y1 = segs[o + 1] as number
+      const cx = segs[o + 2] as number
+      const cy = segs[o + 3] as number
+      const x2 = segs[o + 4] as number
+      const y2 = segs[o + 5] as number
+      const one = (dx: number, dy: number): void => {
+        ctx.beginPath()
+        ctx.moveTo(x1 + dx, y1 + dy)
+        ctx.quadraticCurveTo(cx + dx, cy + dy, x2 + dx, y2 + dy)
+        ctx.stroke()
+      }
+      one(0, 0)
+      if (mode.wrap) {
+        const sx =
+          Math.min(x1, cx, x2) < 0 ? W : Math.max(x1, cx, x2) > W ? -W : 0
+        const sy =
+          Math.min(y1, cy, y2) < 0 ? W : Math.max(y1, cy, y2) > W ? -W : 0
+        if (sx) one(sx, 0)
+        if (sy) one(0, sy)
+        if (sx && sy) one(sx, sy)
+      }
     }
 
     /**
@@ -499,19 +573,21 @@ export class Renderer {
       )
     }
     const bodyTint = this.recoil > 0 ? easeOutCubic(this.recoil) * 0.55 : 0
-    for (let i = len - 1; i >= 1; i--) {
-      const k = i / Math.max(1, len - 1)
-      const base = this.bodyColors[i] as string
+    const denom = Math.max(1, len - 1)
+    for (let k = 0; k < len; k++) {
+      const j = len - 1 - k
+      const base = this.bodyColors[j] as string
       ctx.strokeStyle = bodyTint > 0 ? mixHex(base, THEME.shu, bodyTint) : base
-      ctx.lineWidth = lerp(CELL * 0.74, CELL * 0.42, k)
-      link(pts[i] as { x: number; y: number }, pts[i - 1] as { x: number; y: number })
+      ctx.lineWidth = lerp(CELL * 0.74, CELL * 0.42, j / denom)
+      strokeSeg(k)
     }
 
     // Specular highlight along the spine.
     ctx.strokeStyle = 'rgba(255,255,255,.10)'
-    for (let i = len - 1; i >= 1; i--) {
-      ctx.lineWidth = lerp(CELL * 0.22, CELL * 0.08, i / Math.max(1, len - 1))
-      link(pts[i] as { x: number; y: number }, pts[i - 1] as { x: number; y: number })
+    for (let k = 0; k < len; k++) {
+      const j = len - 1 - k
+      ctx.lineWidth = lerp(CELL * 0.22, CELL * 0.08, j / denom)
+      strokeSeg(k)
     }
 
     // Earned characters, carried on the body — the run doubles as a record of
@@ -529,18 +605,53 @@ export class Renderer {
     }
 
     const head = pts[0] as { x: number; y: number }
+
+    /**
+     * Heading from the neck geometry, not the input direction. The neck
+     * vector interpolates through a turn — old direction at the start of the
+     * move, new direction at the end — so the head carves smoothly around a
+     * corner instead of snapping 90° the frame the turn commits.
+     */
+    const neck = pts[1]
+    let angle: number
+    if (neck) {
+      const hdx = head.x - near(head.x, neck.x)
+      const hdy = head.y - near(head.y, neck.y)
+      angle = hdx || hdy ? Math.atan2(hdy, hdx) : dirAngle(world.input.current)
+    } else {
+      angle = dirAngle(world.input.current)
+    }
+
+    // Where the eyes look: the target tile (any of them in a word level),
+    // via its nearest wrapped copy. The vector stays in board space here;
+    // drawHead rotates it into the head's local frame.
+    let lookX = 0
+    let lookY = 0
+    let hasLook = false
+    for (const it of world.items) {
+      if (!it.correct) continue
+      lookX = near(head.x, it.x * CELL + CELL / 2) - head.x
+      lookY = near(head.y, it.y * CELL + CELL / 2) - head.y
+      hasLook = true
+      break
+    }
+
     const hn = fillMirrors(head.x, head.y)
     // Copy out: drawHead calls fillMirrors' buffer owner again indirectly.
     const heads: number[] = []
     for (let k = 0; k < hn; k++) heads.push(mbuf[k] as number)
-    this.drawHead(heads, world)
+    this.drawHead(heads, world, angle, hasLook, lookX, lookY)
   }
 
-  private drawHead(heads: number[], world: World): void {
+  private drawHead(
+    heads: number[],
+    world: World,
+    angle: number,
+    hasLook: boolean,
+    lookX: number,
+    lookY: number,
+  ): void {
     const ctx = this.ctx
-    const dir = world.input.current
-    const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0
-    const dy = dir === 'up' ? -1 : dir === 'down' ? 1 : 0
 
     /**
      * Squash and stretch — the oldest trick in animation.
@@ -555,6 +666,36 @@ export class Renderer {
     const squash = 1 / stretch
     const r = CELL * 0.44
 
+    /**
+     * Blink, on a cycle that shares no small common multiple with the tongue
+     * flick, so the two idle motions never sync into a metronome. The lids
+     * close and open inside ~140ms — a real blink, not a wink for the camera.
+     */
+    const bt = this.clock % 4.3
+    const blink = bt < 0.14 ? Math.sin((bt / 0.14) * Math.PI) : 0
+
+    /**
+     * The pupils track the target tile — an eye saccade is the cheapest
+     * "this creature is thinking" signal in animation, and a snake that
+     * visibly looks at the character it wants is on-theme to the bone.
+     * Rotate the board-space look vector into the head's local frame and
+     * clamp it so the catchlight stays inside the eye.
+     */
+    let px = 1.5
+    let py = 0
+    if (hasLook) {
+      const cos = Math.cos(-angle)
+      const sin = Math.sin(-angle)
+      const lx = lookX * cos - lookY * sin
+      const ly = lookX * sin + lookY * cos
+      const m = Math.hypot(lx, ly)
+      if (m > 1) {
+        const s = (CELL * 0.035) / m
+        px = lx * s
+        py = ly * s
+      }
+    }
+
     for (let k = 0; k < heads.length; k += 2) {
       const hx = heads[k] as number
       const hy = heads[k + 1] as number
@@ -563,7 +704,7 @@ export class Renderer {
       ctx.translate(hx, hy)
       // Rotate into the direction of travel so squash and stretch align with
       // it, then scale, then draw everything in the head's local frame.
-      ctx.rotate(Math.atan2(dy, dx))
+      ctx.rotate(angle)
       ctx.scale(stretch, squash)
 
       ctx.fillStyle = THEME.jadeBright
@@ -576,19 +717,23 @@ export class Renderer {
       ctx.arc(-r * 0.35, 0, r * 0.62, 0, TWO_PI)
       ctx.fill()
 
-      // Eyes, offset forward and to each side of the travel axis.
+      // Eyes, offset forward and to each side of the travel axis; the blink
+      // squashes the ink vertically in the head's local frame.
       const ex = r * 0.36
       const ey = r * 0.39
+      const er = CELL * 0.075
       ctx.fillStyle = THEME.ink
       ctx.beginPath()
-      ctx.arc(ex, ey, CELL * 0.075, 0, TWO_PI)
-      ctx.arc(ex, -ey, CELL * 0.075, 0, TWO_PI)
+      ctx.ellipse(ex, ey, er, er * (1 - 0.85 * blink), 0, 0, TWO_PI)
+      ctx.ellipse(ex, -ey, er, er * (1 - 0.85 * blink), 0, 0, TWO_PI)
       ctx.fill()
-      ctx.fillStyle = THEME.washi
-      ctx.beginPath()
-      ctx.arc(ex + 1.5, ey, CELL * 0.028, 0, TWO_PI)
-      ctx.arc(ex + 1.5, -ey, CELL * 0.028, 0, TWO_PI)
-      ctx.fill()
+      if (blink < 0.5) {
+        ctx.fillStyle = THEME.washi
+        ctx.beginPath()
+        ctx.arc(ex + px, ey + py, CELL * 0.028, 0, TWO_PI)
+        ctx.arc(ex + px, -ey + py, CELL * 0.028, 0, TWO_PI)
+        ctx.fill()
+      }
 
       // Tongue flick, on a slow cycle. Idle motion keeps the snake feeling
       // alive on the frames where nothing is happening.

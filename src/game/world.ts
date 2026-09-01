@@ -60,6 +60,13 @@ export interface WorldOptions {
   obstacles?: ReadonlySet<number>
   /** Presentation hint only — the simulation never branches on it. */
   reverse?: boolean
+  /**
+   * Neutral deck: ignore personal history when choosing targets and
+   * distractors. With a fixed seed this makes the question sequence
+   * identical for every player — the daily challenge's whole premise.
+   * Learning stats are still RECORDED; they just don't steer selection.
+   */
+  neutral?: boolean
 }
 
 const idx = (x: number, y: number): number => y * BOARD.cells + x
@@ -71,6 +78,16 @@ export class World {
 
   private table: CharTable
   private stats: Record<string, CharStat>
+  /**
+   * The deck stream: a SECOND rng used only for what to ask and which decoys
+   * to offer. Layout randomness (free-cell shuffles, bob phases) stays on
+   * `rng`, whose consumption depends on how the player plays — splitting the
+   * streams means two people on the same daily seed face the identical
+   * sequence of questions and decoys even as their boards diverge.
+   */
+  private readonly deckRng: Rng
+  /** Stats consulted for target/distractor choice; {} on neutral runs. */
+  private readonly selectionStats: Record<string, CharStat>
 
   snake: Segment[] = []
   /** Positions at the last committed move, for render interpolation. */
@@ -95,6 +112,9 @@ export class World {
   readonly runLearned = new Set<string>()
   /** Characters whose mastery flipped during this run, in order. */
   readonly runMastered: string[] = []
+  /** Confusion pairs recorded this run — unordered, keyed "a→b" with the
+   *  ends sorted, so both directions of one mix-up count as one pair. */
+  readonly runConfused = new Map<string, number>()
 
   /** Word-level state. `target` always holds the currently-needed character. */
   word: WordEntry | null = null
@@ -111,6 +131,10 @@ export class World {
   /** Time accumulated toward the next move. Also the render interpolation phase. */
   private moveClock = 0
   private lastTarget: string | null = null
+  /** A death that has occurred but is held open for a saving turn to arrive. */
+  private pendingDeath: DeathReason | null = null
+  /** Seconds left in the late-turn forgiveness window. */
+  private graceLeft = 0
 
   constructor(opts: WorldOptions) {
     this.table = opts.table
@@ -119,6 +143,8 @@ export class World {
     this.words = opts.words?.length ? opts.words : null
     this.reverse = opts.reverse ?? false
     this.rng = new Rng(opts.seed)
+    this.deckRng = new Rng((this.rng.seed ^ 0x51ab3c7) >>> 0)
+    this.selectionStats = opts.neutral ? {} : opts.stats
     this.input = new DirectionBuffer('right')
     this.interval = moveInterval(0, this.mode)
     // Defensive: never let an authored layout bury the spawn row. Layouts are
@@ -162,7 +188,10 @@ export class World {
     this.runErrors.clear()
     this.runLearned.clear()
     this.runMastered.length = 0
+    this.runConfused.clear()
     this.alive = true
+    this.pendingDeath = null
+    this.graceLeft = 0
     this.moveClock = 0
     this.lastTarget = null
     this.word = null
@@ -195,10 +224,16 @@ export class World {
     this.targetAge += dt
     for (const it of this.items) it.age += dt
 
+    // A death is being held open for a saving turn; nothing else moves.
+    if (this.pendingDeath) {
+      this.graceUpdate(dt)
+      return
+    }
+
     this.moveClock += dt
     // `while`, not `if`: a step could be long enough to owe more than one move
     // at high speed, and skipping the debt would make the snake stutter.
-    while (this.alive && this.moveClock >= this.interval) {
+    while (this.alive && !this.pendingDeath && this.moveClock >= this.interval) {
       this.moveClock -= this.interval
       this.step()
     }
@@ -232,33 +267,26 @@ export class World {
     }
   }
 
-  private step(): void {
-    this.snapshotPrev()
-
-    const dir = this.input.consume()
-    const v = DIR_VECTORS[dir]
+  /** Where `dir` leads from the head, wrap applied. null = off the board. */
+  private destOf(dir: Dir): { x: number; y: number } | null {
     const head = this.snake[0]
-    if (!head) return
-
+    if (!head) return null
+    const v = DIR_VECTORS[dir]
     let nx = head.x + v.x
     let ny = head.y + v.y
-
     if (this.mode.wrap) {
       nx = (nx + BOARD.cells) % BOARD.cells
       ny = (ny + BOARD.cells) % BOARD.cells
     } else if (nx < 0 || ny < 0 || nx >= BOARD.cells || ny >= BOARD.cells) {
-      this.die('wall')
-      return
+      return null
     }
+    return { x: nx, y: ny }
+  }
 
-    if (this.obstacles.has(idx(nx, ny))) {
-      this.die('wall')
-      return
-    }
-
-    const hitIndex = this.items.findIndex((i) => i.x === nx && i.y === ny)
-    const hit = hitIndex >= 0 ? this.items[hitIndex] : undefined
-    const growing = hit?.correct === true
+  /** Why moving to `dest` would kill, or null when the move is safe. */
+  private fatalAt(dest: { x: number; y: number } | null): DeathReason | null {
+    if (!dest) return 'wall'
+    if (this.obstacles.has(idx(dest.x, dest.y))) return 'wall'
 
     /**
      * Self-collision, correctly.
@@ -268,14 +296,23 @@ export class World {
      * around a tight loop. The prototype tested every segment including the
      * tail and killed you for a move that was never actually a collision.
      */
+    const hit = this.items.find((i) => i.x === dest.x && i.y === dest.y)
+    const growing = hit?.correct === true
     const bodyEnd = growing ? this.snake.length : this.snake.length - 1
     for (let i = 0; i < bodyEnd; i++) {
       const s = this.snake[i]
-      if (s && s.x === nx && s.y === ny) {
-        this.die('self')
-        return
-      }
+      if (s && s.x === dest.x && s.y === dest.y) return 'self'
     }
+    return null
+  }
+
+  /** Execute a move already known to be safe. */
+  private commitMove(dest: { x: number; y: number }): void {
+    const nx = dest.x
+    const ny = dest.y
+    const hitIndex = this.items.findIndex((i) => i.x === nx && i.y === ny)
+    const hit = hitIndex >= 0 ? this.items[hitIndex] : undefined
+    const growing = hit?.correct === true
 
     const newHead: Segment = { x: nx, y: ny, ch: '' }
 
@@ -294,6 +331,67 @@ export class World {
     }
 
     this.events.emit('moved', { grew: growing })
+  }
+
+  private step(): void {
+    this.snapshotPrev()
+
+    let dest = this.destOf(this.input.consume())
+    let reason = this.fatalAt(dest)
+
+    /**
+     * Late-turn forgiveness, part one: a turn already sitting in the buffer
+     * that escapes the death is taken NOW. The player made that input in
+     * time — it simply had not been consumed yet — so honouring it is not
+     * mercy, it is honesty about when the input happened.
+     */
+    while (reason && this.input.queued > 0) {
+      dest = this.destOf(this.input.consume())
+      reason = this.fatalAt(dest)
+    }
+
+    if (reason !== null || !dest) {
+      /**
+       * Part two: hold the death open for a short grace window instead of
+       * committing it (see graceUpdate). At the pace floor the difference
+       * between a clean dodge and a "cheap" death is one frame of input
+       * latency; a window shorter than perception but longer than that
+       * latency converts the cheap deaths, and only the cheap deaths.
+       */
+      this.pendingDeath = reason ?? 'wall'
+      this.graceLeft = SNAKE.lateTurnGrace
+      return
+    }
+
+    this.commitMove(dest)
+  }
+
+  /**
+   * A death is pending. A turn arriving inside the window that escapes it
+   * cancels the death and executes immediately, so the rescue is felt the
+   * moment the finger moves — not a move later. Fatal queued turns are
+   * discarded to keep the shallow buffer open for the one that saves. The
+   * snake holds still at the point of impact while the window runs: ~90ms of
+   * stillness before a death reads as the thud landing, and after a rescue
+   * it is far too brief to register as a pause.
+   */
+  private graceUpdate(dt: number): void {
+    while (this.input.queued > 0) {
+      const dest = this.destOf(this.input.consume())
+      if (dest && !this.fatalAt(dest)) {
+        this.pendingDeath = null
+        this.snapshotPrev()
+        this.commitMove(dest)
+        this.moveClock = 0
+        return
+      }
+    }
+    this.graceLeft -= dt
+    if (this.graceLeft <= 0) {
+      const reason = this.pendingDeath as DeathReason
+      this.pendingDeath = null
+      this.die(reason)
+    }
   }
 
   private onCorrect(item: Item): void {
@@ -366,6 +464,18 @@ export class World {
     }
     this.statFor(item.ch).err += 1
     this.runErrors.set(item.ch, (this.runErrors.get(item.ch) ?? 0) + 1)
+
+    // The confusion matrix: asked for `target`, bit `item.ch`. This pair —
+    // not the two independent error counts — is what lets the spawner
+    // surround a target with YOUR lookalikes next time (chooseDistractors).
+    if (target && target !== item.ch) {
+      const stat = this.statFor(target)
+      const conf = (stat.confused ??= {})
+      conf[item.ch] = (conf[item.ch] ?? 0) + 1
+      const key =
+        target < item.ch ? `${target}→${item.ch}` : `${item.ch}→${target}`
+      this.runConfused.set(key, (this.runConfused.get(key) ?? 0) + 1)
+    }
 
     this.events.emit('wrong', {
       item,
@@ -458,7 +568,12 @@ export class World {
     this.items = []
     this.targetAge = 0
 
-    const target = chooseTarget(this.table, this.stats, this.rng, this.lastTarget)
+    const target = chooseTarget(
+      this.table,
+      this.selectionStats,
+      this.deckRng,
+      this.lastTarget,
+    )
     if (!target) return
     this.target = target
     this.lastTarget = target
@@ -466,7 +581,8 @@ export class World {
     const distractors = chooseDistractors(
       this.table,
       target,
-      this.rng,
+      this.selectionStats,
+      this.deckRng,
       Math.min(SPAWN.distractors, Math.max(0, Object.keys(this.table).length - 1)),
     )
 
@@ -504,7 +620,7 @@ export class World {
 
     const pool = this.words.filter((e) => e.w !== this.lastWord)
     const entry =
-      this.rng.pick(pool.length ? pool : this.words) ?? this.words[0]
+      this.deckRng.pick(pool.length ? pool : this.words) ?? this.words[0]
     if (!entry) return
     this.word = entry
     this.lastWord = entry.w
@@ -527,8 +643,8 @@ export class World {
         }
       }
     }
-    this.rng.shuffle(lookalikes)
-    const fillers = this.rng.shuffle(
+    this.deckRng.shuffle(lookalikes)
+    const fillers = this.deckRng.shuffle(
       Object.keys(this.table).filter(
         (c) => eligible(c) && !lookalikes.includes(c),
       ),

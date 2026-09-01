@@ -21,6 +21,14 @@ const WRITE_DELAY_MS = 400
 export interface CharStat {
   ok: number
   err: number
+  /**
+   * The confusion matrix, one row: when THIS character was asked for, which
+   * characters were bitten instead, and how often. `err` says you struggle
+   * with a character; this says what you mistake it FOR — which is what lets
+   * the spawner surround a target with your personal lookalikes instead of a
+   * static guess. Absent until the first recorded mix-up.
+   */
+  confused?: Record<string, number>
 }
 
 export interface LevelState {
@@ -80,7 +88,20 @@ function parseStats(raw: unknown): Record<string, CharStat> {
   for (const [ch, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!value || typeof value !== 'object') continue
     const v = value as Record<string, unknown>
-    out[ch] = { ok: Math.max(0, num(v['ok'])), err: Math.max(0, num(v['err'])) }
+    const stat: CharStat = {
+      ok: Math.max(0, num(v['ok'])),
+      err: Math.max(0, num(v['err'])),
+    }
+    const conf = v['confused']
+    if (conf && typeof conf === 'object') {
+      const confused: Record<string, number> = {}
+      for (const [c, n] of Object.entries(conf as Record<string, unknown>)) {
+        const count = num(n)
+        if (count > 0) confused[c] = count
+      }
+      if (Object.keys(confused).length) stat.confused = confused
+    }
+    out[ch] = stat
   }
   return out
 }

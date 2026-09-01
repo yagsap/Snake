@@ -47,6 +47,13 @@ export class DirectionBuffer {
     return this.facing
   }
 
+  /** Turns waiting in the buffer. The world's late-turn forgiveness scans
+   *  these when a move would kill, so a turn that arrived in time but had
+   *  not been consumed yet can still save the run. */
+  get queued(): number {
+    return this.queue.length
+  }
+
   /** The direction a new input is judged against — last queued, else current. */
   private get tail(): Dir {
     return this.queue[this.queue.length - 1] ?? this.facing

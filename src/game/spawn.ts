@@ -44,8 +44,21 @@ export function chooseTarget(
   return rng.weighted(chars, weights) ?? (chars[0] as string)
 }
 
+/** How many distractor slots the player's own confusion history may claim. */
+const PERSONAL_CAP = 2
+
 /**
- * Distractors: confusable lookalikes first, filler after.
+ * Distractors: the player's OWN confusions first, static lookalikes second,
+ * filler after.
+ *
+ * The static CONFUSE table is a guess about which characters look alike to
+ * everyone; the stats' confusion matrix is a record of which characters look
+ * alike to YOU. Ranking your recorded mix-ups first (counting both
+ * directions of a pair — biting さ when asked for き and biting き when
+ * asked for さ are the same confusion) turns every question about a shaky
+ * character into targeted discrimination practice. Capped at PERSONAL_CAP
+ * slots: a board made entirely of nemeses is a wall, not a lesson — the
+ * remaining slots keep the static lookalikes and honest filler in play.
  *
  * Characters whose romanisation matches the target are excluded outright. In
  * "both" mode あ and ア are both a valid reading of "a", and an unwinnable
@@ -54,16 +67,37 @@ export function chooseTarget(
 export function chooseDistractors(
   table: CharTable,
   target: string,
+  stats: Record<string, CharStat>,
   rng: Rng,
   count: number,
 ): string[] {
   const targetSound = table[target]
   const eligible = (c: string) => c !== target && table[c] !== targetSound
 
+  const confusion = new Map<string, number>()
+  const mine = stats[target]?.confused
+  if (mine) {
+    for (const [c, n] of Object.entries(mine)) {
+      if (c in table && eligible(c)) confusion.set(c, n)
+    }
+  }
+  for (const c of Object.keys(table)) {
+    const n = stats[c]?.confused?.[target]
+    if (n && eligible(c)) confusion.set(c, (confusion.get(c) ?? 0) + n)
+  }
+  const personal = [...confusion.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, Math.min(PERSONAL_CAP, count))
+    .map(([c]) => c)
+
+  const chosen = [...personal]
+  const taken0 = new Set(chosen)
   const lookalikes = rng.shuffle(
-    confusablesOf(target).filter((c) => c in table && eligible(c)),
+    confusablesOf(target).filter(
+      (c) => c in table && eligible(c) && !taken0.has(c),
+    ),
   )
-  const chosen = lookalikes.slice(0, count)
+  chosen.push(...lookalikes.slice(0, count - chosen.length))
 
   if (chosen.length < count) {
     const taken = new Set(chosen)
