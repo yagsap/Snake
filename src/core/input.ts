@@ -192,6 +192,12 @@ export function bindInput(
 
   const onPointerDown = (e: PointerEvent) => {
     if (activeId !== null) return
+    // The surface is the whole play screen, so real controls must keep
+    // working: a press that starts on a button (pause, quit, the d-pad) or
+    // the seal belongs to that control, not to steering — capturing it here
+    // would swallow the click.
+    const target = e.target as HTMLElement | null
+    if (target?.closest('button, select, input, label, .seal')) return
     activeId = e.pointerId
     anchorX = e.clientX
     anchorY = e.clientY

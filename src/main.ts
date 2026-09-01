@@ -756,7 +756,10 @@ function syncVoices(): void {
 
 // ------------------------------------------------------------------- input --
 
-bindInput(canvas, {
+// The steering surface is the WHOLE play screen, not just the canvas: the
+// space under the board is a thumb zone — steer from there and no finger
+// ever covers a character.
+bindInput(playScr, {
   onTurn(dir: Dir) {
     if (scenes.top?.name !== 'play') return
     // Never inline this into the diag call: `diag?.turn(world.turn(dir))`

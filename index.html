@@ -57,6 +57,9 @@
   /* Phones: give the board nearly the full width — every pixel is play area. */
   @media (pointer:coarse){body{padding-left:calc(4px + env(safe-area-inset-left,0px));padding-right:calc(4px + env(safe-area-inset-right,0px))}}
   .scr{width:100%;max-width:520px;display:flex;flex-direction:column;gap:12px}
+  /* The play screen stretches to the bottom of the display so the empty
+     space below the board is part of the steering surface — a thumb zone. */
+  #playScr{flex:1;touch-action:none}
   /* Overlays are the only things that scroll, so they opt back into
      vertical panning; everything else stays gesture-free. */
   .ov{position:fixed;inset:0;z-index:10;background:rgba(28,37,65,.86);backdrop-filter:blur(3px);display:grid;place-items:center;overflow:auto;touch-action:pan-y;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
