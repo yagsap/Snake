@@ -93,8 +93,18 @@ export function nativeWarmup(lang: LangId): void {
  * entire game, so it gets a second engine. Returns false when unavailable so
  * the caller knows the cue stayed silent.
  */
+/** Set when the custom bridge rejects, so callers stop preferring it. */
+let bridgeDead = false
+
+/** Last bridge failure, surfaced by the diagnostic overlay. */
+export const speechBridgeError = { message: '' }
+
+export function nativeSpeakAvailable(): boolean {
+  return isNativeApp && !bridgeDead
+}
+
 export function nativeSpeak(text: string, lang: LangId, volume = 1): boolean {
-  if (!isNativeApp || !text) return false
+  if (!nativeSpeakAvailable() || !text) return false
   // Fire and forget: the plugin resolves immediately, keeps its own session
   // permanently active, and does every bit of speech work off the main
   // thread — there is nothing left to stall and nothing worth awaiting.
@@ -103,6 +113,14 @@ export function nativeSpeak(text: string, lang: LangId, volume = 1): boolean {
     lang: TTS_LANG[lang],
     rate: 0.9,
     volume,
-  }).catch(() => {})
+  }).catch((e: unknown) => {
+    // A failing bridge must not mean a silent game: flag it dead so the
+    // caller's next cue takes the webview engine instead, and keep the
+    // reason where the diagnostic overlay can show it.
+    bridgeDead = true
+    speechBridgeError.message = String(
+      (e as { message?: string })?.message ?? e,
+    )
+  })
   return true
 }

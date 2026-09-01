@@ -1,5 +1,5 @@
 import { LANGUAGES, type LangId } from '../data/scripts'
-import { isNativeApp, nativeSpeak, nativeWarmup } from './native'
+import { nativeSpeak, nativeSpeakAvailable, nativeWarmup } from './native'
 
 /**
  * Speech (the cue) and synthesised tones (the feedback).
@@ -98,7 +98,7 @@ export class Speech {
     // Warm the engine that will actually speak: the webview engine whenever
     // it has a voice, the native fallback when it does not.
     if (!this.voice) {
-      if (isNativeApp && this.warmedVoice !== `native:${this.lang}`) {
+      if (nativeSpeakAvailable() && this.warmedVoice !== `native:${this.lang}`) {
         this.warmedVoice = `native:${this.lang}`
         nativeWarmup(this.lang)
       }
@@ -150,11 +150,8 @@ export class Speech {
     // forever and does all speech work off the main thread. A second device
     // A/B showed even the webview engine paying a per-utterance session
     // transition inside an app shell; this path pays it once, at launch.
-    if (isNativeApp && nativeSpeak(text, this.lang)) return
-    if (!this.voice) {
-      nativeSpeak(text, this.lang)
-      return
-    }
+    if (nativeSpeak(text, this.lang)) return
+    if (!this.voice) return
     // Deferred a tick: TTS engine startup is main-thread work on several
     // platforms, and the frame it would otherwise share is the one drawing
     // the eat feedback. One frame of cue latency is imperceptible; a hitch

@@ -8,7 +8,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        // MainViewController, NOT the base class: it registers the app-local
+        // speech plugin in capacitorDidLoad. The root view controller is
+        // created HERE, programmatically — the storyboard's custom class is
+        // never instantiated, which is exactly how the plugin once shipped
+        // registered-in-theory and absent-at-runtime ("not implemented").
+        window?.rootViewController = MainViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
