@@ -149,18 +149,29 @@
   .lvl.locked{opacity:.4;cursor:default}
   .lvlEndName{font:500 13px var(--mono);color:var(--mist)}
   .over-card h2.gold{color:var(--gold)}
+  .learnLine{min-height:16px;font-size:12px;color:var(--gold);line-height:1.5}
+  .learnLine[hidden]{display:none}
+  .onboardQ{margin:4px 0 2px;text-align:center;font:500 15px var(--mono);color:var(--washi)}
+  #onboardGrid .chip{padding:14px 4px}
 </style>
 </head>
 <body>
 
-<div class="ov" id="menuScr"><div class="menu-card">
+<div class="ov" id="onboardScr" hidden><div class="menu-card">
+  <h1>Script Snake<span id="onboardWord">へび</span></h1>
+  <p class="onboardQ">What do you want to learn?</p>
+  <div class="chips" id="onboardGrid"></div>
+  <p class="hint">you can switch languages anytime</p>
+</div></div>
+
+<div class="ov" id="menuScr" hidden><div class="menu-card">
   <h1>Script Snake<span id="snakeWord">へび</span></h1>
   <div class="chips" id="langGrid"></div>
   <div class="pills" id="setRow"></div>
   <div class="pills" id="modeRow"></div>
   <div class="modeBlurb" id="modeBlurb"></div>
   <div class="result" id="resultLine"></div>
-  <button class="primary" id="campBtn">Campaign</button>
+  <button class="primary" id="campBtn">Levels</button>
   <div style="display:flex;gap:8px">
     <button class="ghost" id="playBtn" style="flex:1">Endless</button>
     <button class="ghost" id="dailyBtn" style="flex:1">Daily run</button>
@@ -194,13 +205,14 @@
   <div class="overScore" id="overScore">0</div>
   <div class="overRecord" id="overRecord"></div>
   <div class="overDetail" id="overDetail"></div>
+  <div class="learnLine" id="overLearn" hidden></div>
   <div class="missRow" id="overMissed" hidden></div>
   <button class="primary" id="againBtn">Again</button>
   <button class="ghost" id="overMenuBtn">menu</button>
 </div></div>
 
 <div class="ov" id="campScr" hidden><div class="menu-card camp-card">
-  <div class="row"><h2 class="campTitle" id="campTitle">campaign</h2><button class="ghost sm" id="campClose">back</button></div>
+  <div class="row"><h2 class="campTitle" id="campTitle">levels</h2><button class="ghost sm" id="campClose">back</button></div>
   <div class="camp-list" id="campList"></div>
 </div></div>
 
@@ -208,9 +220,10 @@
   <h2 id="lvlEndTitle">level clear</h2>
   <div class="lvlEndName" id="lvlEndName"></div>
   <div class="overDetail" id="lvlEndDetail"></div>
+  <div class="learnLine" id="lvlEndLearn" hidden></div>
   <button class="primary" id="lvlNextBtn">Next level</button>
   <button class="ghost" id="lvlRetryBtn">replay</button>
-  <button class="ghost" id="lvlMenuBtn">campaign</button>
+  <button class="ghost" id="lvlMenuBtn">all levels</button>
 </div></div>
 
 <div class="learn" id="learn" role="dialog" aria-label="Character chart">

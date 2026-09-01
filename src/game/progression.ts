@@ -1,5 +1,6 @@
-import { PACE, SCORING } from './config'
+import { PACE, SCORING, SPAWN } from './config'
 import type { Mode } from './modes'
+import type { CharStat } from '../core/storage'
 import { clamp, clamp01, invLerp } from '../core/time'
 
 /**
@@ -27,6 +28,25 @@ export function moveInterval(eaten: number, mode: Mode): number {
 /** 0..1 progress from starting pace to the floor. Drives HUD intensity. */
 export function paceProgress(interval: number): number {
   return 1 - invLerp(PACE.minInterval, PACE.startInterval, interval)
+}
+
+/**
+ * Mastery, in ONE place — the chart, the mid-run celebration and the run
+ * receipt must never disagree about what "mastered" means.
+ *
+ * A character is mastered after `masteredAt` correct bites AND three correct
+ * bites for every miss. The second clause is the redemption arc: the old rule
+ * (any miss disqualifies forever) meant the characters a learner most
+ * struggled with — which are exactly the ones the game exists for — could
+ * never be celebrated, no matter how solid they became.
+ */
+export function isMastered(s: CharStat): boolean {
+  return s.ok >= SPAWN.masteredAt && s.ok >= s.err * 3
+}
+
+/** Correct bites still needed before `isMastered` flips. 0 when it has. */
+export function hitsToMaster(s: CharStat): number {
+  return Math.max(0, SPAWN.masteredAt - s.ok, s.err * 3 - s.ok)
 }
 
 /** Score multiplier from the current streak of correct bites. */

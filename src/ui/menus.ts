@@ -7,8 +7,8 @@ import {
   type CharTable,
   type LangId,
 } from '../data/scripts'
-import { SPAWN } from '../game/config'
 import { MODES, MODE_IDS, type ModeId } from '../game/modes'
+import { isMastered } from '../game/progression'
 
 /**
  * Menu and study-chart DOM. Pure view code: it renders from state it is given
@@ -96,7 +96,7 @@ export class MenuView {
     const levels = CAMPAIGNS[data.lang]
     const cleared = levels.filter((l) => data.campaign[l.id]?.cleared).length
     $('campBtn').textContent =
-      cleared > 0 ? `Campaign · ${cleared}/${levels.length}` : 'Campaign'
+      cleared > 0 ? `Levels · ${cleared}/${levels.length}` : 'Levels'
   }
 }
 
@@ -121,7 +121,7 @@ export class CampaignView {
 
   open(data: SaveData): void {
     this.levels = CAMPAIGNS[data.lang]
-    $('campTitle').textContent = `${LANGUAGES[data.lang].name} campaign`
+    $('campTitle').textContent = `${LANGUAGES[data.lang].name} levels`
     this.listEl.innerHTML = this.levels
       .map((lvl, i) => {
         const st = data.campaign[lvl.id]
@@ -152,6 +152,8 @@ export interface LevelEndStats {
   levelTitle: string
   detail: string
   hasNext: boolean
+  /** The learning receipt line — what this run was actually FOR. */
+  receipt: string
 }
 
 export class LevelEndView {
@@ -170,6 +172,9 @@ export class LevelEndView {
     $('lvlEndTitle').classList.toggle('gold', stats.cleared && stats.perfect)
     $('lvlEndName').textContent = stats.levelTitle
     $('lvlEndDetail').textContent = stats.detail
+    const learn = $('lvlEndLearn')
+    learn.textContent = stats.receipt
+    learn.hidden = !stats.receipt
     $('lvlNextBtn').hidden = !(stats.cleared && stats.hasNext)
     $('lvlRetryBtn').textContent = stats.cleared ? 'replay' : 'retry'
     this.root.hidden = false
@@ -272,7 +277,10 @@ export class ChartView {
     this.chartEl.innerHTML = chars
       .map((c) => {
         const s = stat(c)
-        const cls = s.err > 0 ? 'weak' : s.ok >= SPAWN.masteredAt ? 'mastered' : ''
+        // The shared predicate allows redemption: a character you once
+        // missed CAN earn its green border back. The red border marks work
+        // still owed, not a permanent record.
+        const cls = isMastered(s) ? 'mastered' : s.err > 0 ? 'weak' : ''
         return `<div class="tile ${cls}" data-ch="${c}" role="button" tabindex="0"><b>${c}</b><i>${table[c]}</i>${s.err > 0 ? `<em>×${s.err}</em>` : ''}</div>`
       })
       .join('')
@@ -304,6 +312,8 @@ export interface GameOverStats {
   isRecord: boolean
   /** The characters missed this run, worst first, for the "review these" row. */
   missed: Array<{ ch: string; sound: string }>
+  /** The learning receipt line — what this run was actually FOR. */
+  receipt: string
 }
 
 export class GameOverView {
@@ -323,6 +333,9 @@ export class GameOverView {
     $('overRecord').textContent = stats.isRecord ? 'new best!' : ''
     $('overDetail').textContent =
       `${stats.eaten} eaten · best streak ${stats.bestStreak} · ${stats.mistakes} ${stats.mistakes === 1 ? 'miss' : 'misses'}`
+    const learn = $('overLearn')
+    learn.textContent = stats.receipt
+    learn.hidden = !stats.receipt
     const row = $('overMissed')
     if (stats.missed.length) {
       row.hidden = false
@@ -347,5 +360,37 @@ export class GameOverView {
 
   get visible(): boolean {
     return !this.root.hidden
+  }
+}
+
+// -------------------------------------------------------------- onboarding --
+
+/**
+ * The first-launch question — the ONLY question. A new player picks what they
+ * want to learn and is eating their first character seconds later; sets,
+ * modes and settings introduce themselves once the game has proven itself.
+ */
+export class OnboardView {
+  private root = $('onboardScr')
+
+  constructor(onPick: (lang: LangId) => void) {
+    const grid = $('onboardGrid')
+    grid.innerHTML = LANG_IDS.map((id) => {
+      const [native, english] = LANGUAGES[id].labels
+      return `<button class="chip" data-lang="${id}"><b>${native}</b><span>${english}</span></button>`
+    }).join('')
+    grid.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')
+      const lang = btn?.dataset.lang
+      if (lang) onPick(lang as LangId)
+    })
+  }
+
+  open(): void {
+    this.root.hidden = false
+  }
+
+  close(): void {
+    this.root.hidden = true
   }
 }

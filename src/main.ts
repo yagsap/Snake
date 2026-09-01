@@ -15,7 +15,7 @@ import { bindInput, DIR_VECTORS, type Dir } from './core/input'
 import { SceneStack, type Scene } from './core/scene'
 import { load, save, saveNow, type SaveData } from './core/storage'
 import { buildTable, LANGUAGES, setNamesFor, type CharTable } from './data/scripts'
-import { CELL, JUICE, THEME } from './game/config'
+import { BOARD, CELL, JUICE, THEME } from './game/config'
 import {
   CAMPAIGNS,
   dailySeed,
@@ -26,7 +26,7 @@ import {
   type WordEntry,
 } from './game/levels'
 import { MODES, type Mode } from './game/modes'
-import { comboMultiplier } from './game/progression'
+import { comboMultiplier, hitsToMaster, isMastered } from './game/progression'
 import { World } from './game/world'
 import { Renderer } from './render/renderer'
 import { Speech, Tones } from './ui/audio'
@@ -37,6 +37,7 @@ import {
   GameOverView,
   LevelEndView,
   MenuView,
+  OnboardView,
 } from './ui/menus'
 import { haptic, initNativeChrome, isNativeApp } from './ui/native'
 import { Diag } from './ui/diag'
@@ -143,6 +144,26 @@ function levelRun(level: LevelSpec, index: number): RunConfig {
   }
 }
 
+/**
+ * The learning receipt shown on every end card. Score is the arcade currency;
+ * this line is the currency the player actually downloaded the game for —
+ * each session must end with proof it moved them toward reading the script.
+ */
+function runReceipt(w: World): string {
+  const practiced = w.runLearned.size
+  if (!practiced) return ''
+  const parts = [`${practiced} character${practiced === 1 ? '' : 's'} practiced`]
+  if (w.runMastered.length) {
+    parts.push(`${w.runMastered.slice(0, 4).join(' ')} mastered`)
+  }
+  const close = [...w.runLearned].filter((ch) => {
+    const s = data.stats[ch]
+    return s && !isMastered(s) && hitsToMaster(s) <= 2
+  }).length
+  if (close) parts.push(`${close} close to mastery`)
+  return parts.join(' · ')
+}
+
 const goalText = (r: RunConfig, w: World): string => {
   if (!r.level) return ''
   const done = r.words ? w.wordsDone : w.eaten
@@ -206,6 +227,17 @@ function makePlayScene(r: RunConfig): Scene {
         }),
 
         w.events.on('moved', () => diag?.move(w.interval)),
+
+        // The game's biggest moment: a character joined the player for good.
+        w.events.on('mastered', ({ item, ch }) => {
+          const c = renderer.centerOf(item)
+          haptic.multiplier()
+          tones.mastered()
+          renderer.flash.fire(THEME.gold, 0.08)
+          renderer.fx.ring(c.x, c.y, THEME.gold, 0.8, CELL * 2.2)
+          renderer.fx.burst(c.x, c.y, THEME.gold, 14, 260)
+          renderer.fx.text(c.x, c.y - 48, `${ch} mastered!`, THEME.gold, 1.8, 22)
+        }),
 
         w.events.on('wordProgress', ({ entry, index }) => {
           hud.setWord(entry.w, index)
@@ -359,9 +391,17 @@ function makePlayScene(r: RunConfig): Scene {
   }
 }
 
-/** Level completion/failure: record progress and bring up the card. */
+/**
+ * Level completion/failure.
+ *
+ * A CLEAR with a next level flows straight into it after a short on-board
+ * celebration — no card, no button. The card interrupted the exact moment a
+ * player is most willing to keep going, to ask a question ("next level?")
+ * whose answer is almost always yes. Cards remain for the two real decision
+ * points: failure (retry or study?) and the end of the campaign.
+ */
 function finishLevel(r: RunConfig, w: World, cleared: boolean): void {
-  if (!r.level || scenes.has('levelend')) return
+  if (!r.level || scenes.has('levelend') || scenes.has('levelflow')) return
   const perfect = cleared && w.mistakes === 0
   if (cleared) {
     const prev = data.campaign[r.level.id]
@@ -372,7 +412,44 @@ function finishLevel(r: RunConfig, w: World, cleared: boolean): void {
     save(data)
   }
   while (scenes.top && scenes.top.name !== 'play') scenes.pop()
-  scenes.push(makeLevelEndScene(r, w, cleared, perfect))
+  const levels = CAMPAIGNS[data.lang]
+  const next = cleared && r.levelIndex >= 0 ? levels[r.levelIndex + 1] : undefined
+  if (cleared && next) {
+    scenes.push(makeLevelFlowScene(next, r.levelIndex + 1, perfect))
+  } else {
+    scenes.push(makeLevelEndScene(r, w, cleared, perfect))
+  }
+}
+
+/**
+ * The moment between levels: the board keeps drawing (the sim stops because
+ * this scene is on top), a celebration plays where the player is already
+ * looking, and the next level starts itself. Quitting during the window
+ * tears the timer down with the scene.
+ */
+function makeLevelFlowScene(next: LevelSpec, nextIndex: number, perfect: boolean): Scene {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return {
+    name: 'levelflow',
+    drawsBelow: true,
+    enter() {
+      const cx = BOARD.size / 2
+      tones.mastered()
+      haptic.multiplier()
+      renderer.flash.fire(perfect ? THEME.gold : THEME.jade, 0.14)
+      renderer.fx.ring(cx, cx, perfect ? THEME.gold : THEME.jade, 0.9, CELL * 4)
+      renderer.fx.text(cx, cx - 40, perfect ? 'perfect clear!' : 'level clear!', THEME.gold, 1.7, 34)
+      renderer.fx.text(cx, cx + 4, `next: ${next.title}`, THEME.washi, 1.7, 16)
+      timer = setTimeout(() => {
+        if (scenes.top?.name === 'levelflow') {
+          scenes.replaceAll(makePlayScene(levelRun(next, nextIndex)))
+        }
+      }, 1700)
+    },
+    exit() {
+      clearTimeout(timer)
+    },
+  }
 }
 
 /**
@@ -428,6 +505,7 @@ function makeGameOverScene(isRecord: boolean, r: RunConfig): Scene {
         mistakes: w.mistakes,
         isRecord,
         missed,
+        receipt: runReceipt(w),
       })
     },
     exit() {
@@ -457,6 +535,7 @@ function makeLevelEndScene(
             ? 'too many misses — study the chart and try again'
             : 'crashed — steady does it',
         hasNext: r.levelIndex >= 0 && r.levelIndex + 1 < levels.length,
+        receipt: runReceipt(w),
       })
     },
     exit() {
@@ -474,6 +553,24 @@ function makeCampaignScene(): Scene {
     },
     exit() {
       campaignView.close()
+    },
+  }
+}
+
+/**
+ * First launch only: one question, then straight into level 1. The menu with
+ * its seven languages, sets and modes is a fine home screen and a terrible
+ * first impression — a new player should be eating their first character,
+ * voice speaking, within seconds of opening the app.
+ */
+function makeOnboardScene(): Scene {
+  return {
+    name: 'onboard',
+    enter() {
+      onboardView.open()
+    },
+    exit() {
+      onboardView.close()
     },
   }
 }
@@ -535,6 +632,20 @@ const menuView = new MenuView({
   onLearn() {
     scenes.push(makeChartScene(table))
   },
+})
+
+const onboardView = new OnboardView((lang) => {
+  data.lang = lang
+  data.setName = setNamesFor(lang)[0] ?? ''
+  data.onboarded = true
+  table = buildTable(data.lang, data.setName)
+  speech.setLanguage(lang)
+  speech.warmup() // we are inside the tap: the voice loads while level 1 opens
+  syncVoices()
+  save(data)
+  const first = CAMPAIGNS[data.lang][0]
+  if (first) scenes.replaceAll(makePlayScene(levelRun(first, 0)))
+  else scenes.replaceAll(makeMenuScene())
 })
 
 const campaignView = new CampaignView(
@@ -764,7 +875,7 @@ initNativeChrome()
 chartView.syncSettings(data)
 hud.setSealHidden(!data.showRomaji && !!speech.current)
 syncVoices()
-scenes.push(makeMenuScene())
+scenes.push(data.onboarded ? makeMenuScene() : makeOnboardScene())
 loop.start()
 
 // Dev-only debug handle: lets tooling (and a curious console) inspect the live

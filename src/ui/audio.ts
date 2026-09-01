@@ -307,4 +307,12 @@ export class Tones {
     this.play(659, 0.1, 'sine', 0.08, 0.08)
     this.play(784, 0.22, 'sine', 0.08, 0.16)
   }
+
+  mastered(): void {
+    // Brighter and higher than the multiplier: mastering a character is the
+    // game's biggest moment and deserves its own sound.
+    this.play(659, 0.09)
+    this.play(880, 0.09, 'sine', 0.08, 0.07)
+    this.play(1319, 0.3, 'sine', 0.07, 0.14)
+  }
 }

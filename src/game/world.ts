@@ -5,7 +5,7 @@ import type { CharStat } from '../core/storage'
 import type { CharTable } from '../data/scripts'
 import { BOARD, SNAKE, SPAWN } from './config'
 import type { Mode } from './modes'
-import { awardFor, moveInterval, type Award } from './progression'
+import { awardFor, isMastered, moveInterval, type Award } from './progression'
 import { chooseDistractors, chooseTarget, freeCells } from './spawn'
 import { confusablesOf } from '../data/scripts'
 import type { WordEntry } from './levels'
@@ -41,6 +41,8 @@ export type WorldEvents = {
   death: { reason: DeathReason; score: number; eaten: number }
   /** Emitted after every committed move, for step-locked effects. */
   moved: { grew: boolean }
+  /** This bite pushed a character over the mastery line — celebrate it. */
+  mastered: { item: Item; ch: string; sound: string }
   /** A word level advanced one character (the word is not finished yet). */
   wordProgress: { entry: WordEntry; index: number }
   /** A whole word was completed. */
@@ -89,6 +91,10 @@ export class World {
   elapsed = 0
   /** Characters missed in THIS run (not all-time), for the end-of-run review. */
   readonly runErrors = new Map<string, number>()
+  /** Characters correctly eaten this run — the "practiced" half of the receipt. */
+  readonly runLearned = new Set<string>()
+  /** Characters whose mastery flipped during this run, in order. */
+  readonly runMastered: string[] = []
 
   /** Word-level state. `target` always holds the currently-needed character. */
   word: WordEntry | null = null
@@ -154,6 +160,8 @@ export class World {
     this.mistakes = 0
     this.elapsed = 0
     this.runErrors.clear()
+    this.runLearned.clear()
+    this.runMastered.length = 0
     this.alive = true
     this.moveClock = 0
     this.lastTarget = null
@@ -297,7 +305,10 @@ export class World {
     this.score += award.points
     this.eaten += 1
     this.bestStreak = Math.max(this.bestStreak, this.streak)
-    this.statFor(item.ch).ok += 1
+    const stat = this.statFor(item.ch)
+    const wasMastered = isMastered(stat)
+    stat.ok += 1
+    this.runLearned.add(item.ch)
     this.setInterval(moveInterval(this.eaten, this.mode))
 
     this.events.emit('eat', {
@@ -306,6 +317,16 @@ export class World {
       streak: this.streak,
       score: this.score,
     })
+
+    // After 'eat', so the celebration draws over the reward, not under it.
+    if (!wasMastered && isMastered(stat)) {
+      this.runMastered.push(item.ch)
+      this.events.emit('mastered', {
+        item,
+        ch: item.ch,
+        sound: this.table[item.ch] ?? '',
+      })
+    }
 
     if (this.word) {
       this.wordIndex += 1
