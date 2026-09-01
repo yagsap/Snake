@@ -13,6 +13,8 @@ const PREFERRED =
   /google|nanami|keita|kyoko|otoya|xiaoxiao|yunxi|tingting|milena|irina|swara|hemant|neural|natural|premium|enhanced/i
 
 export class Speech {
+  /** Diagnostic kill-switch: silences BOTH engines without touching state. */
+  muted = false
   private voice: SpeechSynthesisVoice | null = null
   private available: SpeechSynthesisVoice[] = []
   private warmedVoice: string | null = null
@@ -93,12 +95,13 @@ export class Speech {
    * The language's own word for "snake" is short, always valid, and silent.
    */
   warmup(): void {
-    if (isNativeApp) {
-      // Warm the native engine instead — measured as the single largest
-      // frame cost in the app until it was primed. Once per language.
-      if (this.warmedVoice === `native:${this.lang}`) return
-      this.warmedVoice = `native:${this.lang}`
-      nativeWarmup(this.lang)
+    // Warm the engine that will actually speak: the webview engine whenever
+    // it has a voice, the native fallback when it does not.
+    if (!this.voice) {
+      if (isNativeApp && this.warmedVoice !== `native:${this.lang}`) {
+        this.warmedVoice = `native:${this.lang}`
+        nativeWarmup(this.lang)
+      }
       return
     }
     const voice = this.voice
@@ -142,12 +145,13 @@ export class Speech {
   }
 
   speak(text: string): void {
-    if (!text) return
-    // In the app shell, AVSpeechSynthesizer does all of this off the webview
-    // thread — the whole class of speak/cancel main-thread stalls vanishes.
-    if (isNativeApp && nativeSpeak(text, this.lang)) return
+    if (!text || this.muted) return
+    // The WEBVIEW engine first, in the app too. The device A/B test showed
+    // the native plugin's audio-session churn stalling frames, while the
+    // same phone's Safari data had the web engine nearly free — Safari
+    // manages its speech session sanely. Native remains the fallback for
+    // languages the webview has no voice for.
     if (!this.voice) {
-      // No webview voice for this language — try the native synthesizer.
       nativeSpeak(text, this.lang)
       return
     }

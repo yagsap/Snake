@@ -40,18 +40,23 @@ export function initNativeChrome(): void {
  * success, distinct notification for mistakes, heavy for death.
  */
 export const haptic = {
+  /** Diagnostic kill-switch. */
+  enabled: true,
   eat(): void {
-    if (isNativeApp) Haptics.impact({ style: ImpactStyle.Light }).catch(() => {})
+    if (isNativeApp && this.enabled)
+      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {})
   },
   multiplier(): void {
-    if (isNativeApp) Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {})
+    if (isNativeApp && this.enabled)
+      Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {})
   },
   wrong(): void {
-    if (isNativeApp)
+    if (isNativeApp && this.enabled)
       Haptics.notification({ type: NotificationType.Error }).catch(() => {})
   },
   death(): void {
-    if (isNativeApp) Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {})
+    if (isNativeApp && this.enabled)
+      Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {})
   },
 }
 
@@ -78,17 +83,38 @@ export function nativeWarmup(lang: LangId): void {
  * entire game, so it gets a second engine. Returns false when unavailable so
  * the caller knows the cue stayed silent.
  */
+let nativeBusy = false
+let nativePending: { text: string; lang: LangId; volume: number } | null = null
+
+function nativeSpeakNow(text: string, lang: LangId, volume: number): void {
+  nativeBusy = true
+  TextToSpeech.speak({ text, lang: TTS_LANG[lang], rate: 0.9, volume })
+    .catch(() => {})
+    .then(() => {
+      nativeBusy = false
+      const next = nativePending
+      nativePending = null
+      if (next) nativeSpeakNow(next.text, next.lang, next.volume)
+    })
+}
+
 export function nativeSpeak(text: string, lang: LangId, volume = 1): boolean {
   if (!isNativeApp || !text) return false
-  void TextToSpeech.stop()
-    .catch(() => {})
-    .then(() =>
-      TextToSpeech.speak({
-        text,
-        lang: TTS_LANG[lang],
-        rate: 0.9,
-        volume,
-      }).catch(() => {}),
-    )
+  /**
+   * COALESCE, never stop-and-restart. The A/B test on a real device was
+   * unambiguous: sound off, zero stalls; sound on, stalls — and the plugin
+   * source shows why. Its synthesizer runs its own audio session
+   * (usesApplicationAudioSession = false), which iOS activates and
+   * deactivates around utterances; our stop()-then-speak() per cue forced
+   * that transition — a media-server round trip on the app process WKWebView
+   * depends on — over and over mid-run. Speaking back-to-back keeps the
+   * session churn to natural utterance boundaries, and the newest cue simply
+   * replaces any waiting one, so fast eaters still hear the current question.
+   */
+  if (nativeBusy) {
+    nativePending = { text, lang, volume }
+    return true
+  }
+  nativeSpeakNow(text, lang, volume)
   return true
 }

@@ -52,7 +52,20 @@ const tones = new Tones()
 const hud = new Hud()
 const scenes = new SceneStack()
 /** Null unless ?debug is on the URL — see src/ui/diag.ts. */
-const diag = Diag.enabled ? new Diag() : null
+const diag = Diag.enabled
+  ? new Diag({
+      onSound(on) {
+        speech.muted = !on
+        tones.enabled = on
+      },
+      onHaptics(on) {
+        haptic.enabled = on
+      },
+      onFx(on) {
+        renderer.setMotion(on && !data.reducedMotion)
+      },
+    })
+  : null
 
 let world: World | null = null
 
@@ -374,6 +387,8 @@ function makePauseScene(): Scene {
     exit() {
       pauseBtn.textContent = '‖ pause'
       loop.resync()
+      // A pause is not a stall; keep the break out of the move timing.
+      diag?.resetRun()
     },
   }
 }
@@ -388,6 +403,7 @@ function makeChartScene(chartTable: CharTable): Scene {
     exit() {
       chartView.close()
       loop.resync()
+      diag?.resetRun()
     },
   }
 }

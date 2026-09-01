@@ -21,8 +21,24 @@ const STYLE = 'position:fixed;z-index:99;left:6px;top:58px;padding:6px 8px;' +
   'background:rgba(10,14,28,.88);color:#D7F0E0;font:500 10px/1.45 ui-monospace,monospace;' +
   'border:1px solid #2A3660;border-radius:6px;pointer-events:none;white-space:pre'
 
+const BTN_ROW = 'display:flex;gap:6px;margin-top:5px;pointer-events:auto'
+const BTN = 'font:500 13px ui-monospace,monospace;padding:3px 9px;border-radius:5px;' +
+  'border:1px solid #2A3660;background:#1C2541;color:#D7F0E0'
+
 /** A long frame is blamed on anything the game did within this window. */
-const BLAME_WINDOW = 260
+const BLAME_WINDOW = 450
+
+/**
+ * Kill-switches for the A/B hunt. Each toggle silences one subsystem at
+ * runtime so the player can watch the stall counter with it off. Whatever
+ * toggle stops the stalls names the culprit — measured on the exact device
+ * that has the problem, with no rebuild between experiments.
+ */
+export interface DiagSwitches {
+  onSound(on: boolean): void
+  onHaptics(on: boolean): void
+  onFx(on: boolean): void
+}
 
 export class Diag {
   /** Opt-in only: ?debug on the URL. Costs nothing when off. */
@@ -58,11 +74,67 @@ export class Diag {
 
   private since = performance.now()
 
-  constructor() {
+  private readout: HTMLElement
+
+  constructor(switches?: DiagSwitches) {
     this.el = document.createElement('div')
     this.el.setAttribute('style', STYLE)
-    this.el.textContent = 'diag: warming up'
+    this.readout = document.createElement('div')
+    this.readout.textContent = 'diag: warming up'
+    this.el.appendChild(this.readout)
+
+    if (switches) {
+      const row = document.createElement('div')
+      row.setAttribute('style', BTN_ROW)
+      const mk = (
+        label: string,
+        act: (on: boolean) => void,
+        momentary = false,
+      ) => {
+        let on = true
+        const b = document.createElement('button')
+        b.setAttribute('style', BTN)
+        const paint = () => {
+          b.textContent = label
+          b.style.opacity = on ? '1' : '0.35'
+          b.style.borderColor = on ? '#2A3660' : '#E63B2E'
+        }
+        paint()
+        b.addEventListener('pointerdown', (e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          if (!momentary) on = !on
+          act(on)
+          paint()
+        })
+        row.appendChild(b)
+      }
+      mk('↺', () => this.reset(), true)
+      mk('🔊', (on) => switches.onSound(on))
+      mk('📳', (on) => switches.onHaptics(on))
+      mk('✨', (on) => switches.onFx(on))
+      this.el.appendChild(row)
+    }
     document.body.appendChild(this.el)
+  }
+
+  /** Zero every counter, so each toggle experiment starts a fresh count. */
+  private reset(): void {
+    this.fps = 0
+    this.frameTimes = []
+    this.longFrames = 0
+    this.worstFrame = 0
+    this.worstWork = 0
+    this.workTimes = []
+    this.worstMove = 0
+    this.moveStalls = 0
+    this.moves = 0
+    this.lastMove = 0
+    this.turns = 0
+    this.turnsDropped = 0
+    this.worstInput = 0
+    this.blame.clear()
+    this.since = performance.now()
   }
 
   /** Record that the game just did something that might cost a frame. */
@@ -152,7 +224,13 @@ export class Diag {
     }
   }
 
-  /** A run started: move timing from the previous run is meaningless. */
+  /**
+   * A run started or the simulation was deliberately suspended (pause, the
+   * study chart): the gap to the next move is not a stall, it is the player
+   * taking a break — one paused reading measured as a +1928ms "stall" until
+   * the player explained it. Forgetting the last move keeps breaks out of
+   * the numbers.
+   */
   resetRun(): void {
     this.lastMove = 0
   }
@@ -169,7 +247,7 @@ export class Diag {
       .join('  ')
     const w = this.workTimes.sort((a, b) => a - b)
     const w95 = w[Math.floor(w.length * 0.95)] ?? 0
-    this.el.textContent =
+    this.readout.textContent =
       `RENDER ${this.fps}fps p95 ${p95.toFixed(0)}ms worst ${this.worstFrame.toFixed(0)}ms long ${this.longFrames}\n` +
       `OURCODE p95 ${w95.toFixed(1)}ms worst ${this.worstWork.toFixed(0)}ms\n` +
       `SIM    moves ${this.moves} stalls ${this.moveStalls} worst +${this.worstMove.toFixed(0)}ms\n` +
