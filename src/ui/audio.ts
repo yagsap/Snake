@@ -146,11 +146,11 @@ export class Speech {
 
   speak(text: string): void {
     if (!text || this.muted) return
-    // The WEBVIEW engine first, in the app too. The device A/B test showed
-    // the native plugin's audio-session churn stalling frames, while the
-    // same phone's Safari data had the web engine nearly free — Safari
-    // manages its speech session sanely. Native remains the fallback for
-    // languages the webview has no voice for.
+    // In the app: our own native bridge, which holds one audio session open
+    // forever and does all speech work off the main thread. A second device
+    // A/B showed even the webview engine paying a per-utterance session
+    // transition inside an app shell; this path pays it once, at launch.
+    if (isNativeApp && nativeSpeak(text, this.lang)) return
     if (!this.voice) {
       nativeSpeak(text, this.lang)
       return
@@ -212,15 +212,35 @@ export class Speech {
  */
 export class Tones {
   private ctx: AudioContext | null = null
+  private keepAlive: OscillatorNode | null = null
   enabled = true
 
   /**
    * Create the context ahead of time, from a user gesture (the Play click).
    * Creating it lazily on the first eat cost a measured ~100ms hitch on the
    * exact frame the first reward landed.
+   *
+   * It also parks an inaudible oscillator on the destination, forever. iOS
+   * suspends an idle audio context and reactivating it is a media-server
+   * round trip on the main thread — the same stall mechanism the on-device
+   * A/B convicted the speech plugin of. A context that is never idle never
+   * pays it; the running silence costs no audible output and no measurable
+   * CPU.
    */
   warmup(): void {
-    this.ensure()
+    const ctx = this.ensure()
+    if (!ctx || this.keepAlive) return
+    try {
+      const osc = ctx.createOscillator()
+      const mute = ctx.createGain()
+      mute.gain.value = 0
+      osc.connect(mute)
+      mute.connect(ctx.destination)
+      osc.start()
+      this.keepAlive = osc
+    } catch {
+      /* keep-alive is best-effort */
+    }
   }
 
   private ensure(): AudioContext | null {

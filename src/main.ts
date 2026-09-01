@@ -54,8 +54,10 @@ const scenes = new SceneStack()
 /** Null unless ?debug is on the URL — see src/ui/diag.ts. */
 const diag = Diag.enabled
   ? new Diag({
-      onSound(on) {
+      onSpeech(on) {
         speech.muted = !on
+      },
+      onTones(on) {
         tones.enabled = on
       },
       onHaptics(on) {

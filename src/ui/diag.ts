@@ -35,7 +35,8 @@ const BLAME_WINDOW = 450
  * that has the problem, with no rebuild between experiments.
  */
 export interface DiagSwitches {
-  onSound(on: boolean): void
+  onSpeech(on: boolean): void
+  onTones(on: boolean): void
   onHaptics(on: boolean): void
   onFx(on: boolean): void
 }
@@ -110,7 +111,8 @@ export class Diag {
         row.appendChild(b)
       }
       mk('↺', () => this.reset(), true)
-      mk('🔊', (on) => switches.onSound(on))
+      mk('🗣', (on) => switches.onSpeech(on))
+      mk('🎵', (on) => switches.onTones(on))
       mk('📳', (on) => switches.onHaptics(on))
       mk('✨', (on) => switches.onFx(on))
       this.el.appendChild(row)
