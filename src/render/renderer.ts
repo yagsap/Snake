@@ -70,9 +70,28 @@ function glyph(
   if (maxHeight && inkH * s > maxHeight) s = maxHeight / inkH
   if (s < 1) return
   ctx.textBaseline = 'alphabetic'
-  ctx.font = `700 ${s}px ${FONTS.glyph}`
+  ctx.font = glyphFont(s)
   ctx.fillText(ch, x, y + ((m.asc - m.desc) * s) / 2)
   ctx.textBaseline = 'middle'
+}
+
+/**
+ * Font shorthand strings, cached by half-pixel size.
+ *
+ * Assigning ctx.font builds a string AND makes the engine re-parse the
+ * shorthand, and this ran for every glyph on the board and every character
+ * riding the snake, every frame. Quantising to half a pixel is invisible and
+ * turns thousands of fresh strings a second into a handful of reused ones.
+ */
+const fontCache = new Map<number, string>()
+function glyphFont(size: number): string {
+  const key = Math.round(size * 2) / 2
+  let f = fontCache.get(key)
+  if (f === undefined) {
+    f = `700 ${key}px ${FONTS.glyph}`
+    fontCache.set(key, f)
+  }
+  return f
 }
 
 function roundRect(
@@ -137,20 +156,55 @@ export class Renderer {
   private bodyColors: string[] = []
   /** Reused interpolated-position buffer; see drawSnake. */
   private ptsBuf: Array<{ x: number; y: number }> = []
+  /** Reused wrap-mirror buffer, flat x,y pairs; see drawSnake. */
+  private mirrorBuf: number[] = []
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
     if (!ctx) throw new Error('2D canvas context unavailable')
     this.ctx = ctx
-    // Cap DPR at 2: beyond that the pixel cost grows quadratically for a
-    // difference nobody can see on a board made of flat colour.
+    // Start at the old fixed size so the board is never under-resolved: the
+    // canvas lives inside a hidden screen at construction and therefore has
+    // no measurable box yet. Leaving it unset would have handed the browser
+    // its 300px default.
     this.dpr = Math.min(2, window.devicePixelRatio || 1)
-    canvas.width = W * this.dpr
-    canvas.height = W * this.dpr
+    canvas.width = Math.round(W * this.dpr)
+    canvas.height = Math.round(W * this.dpr)
     this.background = createBackground(this.dpr)
+    // A ResizeObserver, not just a window listener: the important event is the
+    // canvas getting its first real size when the play screen is shown, which
+    // no window resize accompanies.
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(() => this.resize()).observe(canvas)
+    } else {
+      addEventListener('resize', () => this.resize())
+    }
     // Metrics measured before the webfonts arrive describe the fallback font.
     // Flush the cache when loading settles so glyphs re-centre correctly.
     document.fonts?.addEventListener('loadingdone', () => metricsCache.clear())
+  }
+
+  /**
+   * Match the backing store to the element's ACTUAL size in device pixels.
+   *
+   * It used to be a fixed 640 x DPR. On a 3x phone that produced a 1280px
+   * buffer displayed across roughly 1146 device pixels — a non-integer
+   * downscale that the compositor had to resample on every single frame, and
+   * ~20% more pixels than the screen could show. Sizing to the real box makes
+   * the blit 1:1. The drawing code keeps its 640-unit coordinate space; only
+   * the transform scale changes.
+   */
+  private resize(): void {
+    const rect = this.canvas.getBoundingClientRect()
+    if (!rect.width) return
+    // Cap the scale: past ~2x the extra pixels cost quadratically for a
+    // difference nobody can see on a board made of flat colour.
+    const scale = Math.min(2, (rect.width * (window.devicePixelRatio || 1)) / W)
+    if (Math.abs(scale - this.dpr) < 0.01) return
+    this.dpr = scale
+    this.canvas.width = Math.round(W * scale)
+    this.canvas.height = Math.round(W * scale)
+    this.background = createBackground(scale)
   }
 
   /** Apply the reduced-motion preference across every effect system at once. */
@@ -414,15 +468,24 @@ export class Renderer {
       ctx.stroke()
     }
 
-    /** Copies of a point just off the opposite edges, so wrapping looks seamless. */
-    const mirrors = (p: { x: number; y: number }) => {
-      const out = [p]
-      if (!mode.wrap) return out
-      if (p.x < CELL) out.push({ x: p.x + W, y: p.y })
-      if (p.x > W - CELL) out.push({ x: p.x - W, y: p.y })
-      if (p.y < CELL) out.push({ x: p.x, y: p.y + W })
-      if (p.y > W - CELL) out.push({ x: p.x, y: p.y - W })
-      return out
+    /**
+     * Copies of a point just off the opposite edges, so wrapping looks
+     * seamless — written as flat x,y pairs into a buffer that outlives the
+     * frame, and returning how many numbers were written. The previous
+     * version built a fresh array (and fresh point objects) per call, and it
+     * is called for every character riding the snake on every frame.
+     */
+    const mbuf = this.mirrorBuf
+    const fillMirrors = (x: number, y: number): number => {
+      mbuf[0] = x
+      mbuf[1] = y
+      let n = 2
+      if (!mode.wrap) return n
+      if (x < CELL) { mbuf[n++] = x + W; mbuf[n++] = y }
+      if (x > W - CELL) { mbuf[n++] = x - W; mbuf[n++] = y }
+      if (y < CELL) { mbuf[n++] = x; mbuf[n++] = y + W }
+      if (y > W - CELL) { mbuf[n++] = x; mbuf[n++] = y - W }
+      return n
     }
 
     ctx.lineCap = 'round'
@@ -457,19 +520,23 @@ export class Renderer {
     for (let i = 1; i < len; i++) {
       const seg = snake[i]
       if (!seg?.ch) continue
-      for (const m of mirrors(pts[i] as { x: number; y: number })) {
-        glyph(ctx, seg.ch, m.x, m.y, CELL * 0.5, CELL * 0.6, CELL * 0.66)
+      const p = pts[i] as { x: number; y: number }
+      const n = fillMirrors(p.x, p.y)
+      for (let k = 0; k < n; k += 2) {
+        glyph(ctx, seg.ch, mbuf[k] as number, mbuf[k + 1] as number,
+          CELL * 0.5, CELL * 0.6, CELL * 0.66)
       }
     }
 
-    this.drawHead(pts[0] as { x: number; y: number }, world, mirrors)
+    const head = pts[0] as { x: number; y: number }
+    const hn = fillMirrors(head.x, head.y)
+    // Copy out: drawHead calls fillMirrors' buffer owner again indirectly.
+    const heads: number[] = []
+    for (let k = 0; k < hn; k++) heads.push(mbuf[k] as number)
+    this.drawHead(heads, world)
   }
 
-  private drawHead(
-    head: { x: number; y: number },
-    world: World,
-    mirrors: (p: { x: number; y: number }) => Array<{ x: number; y: number }>,
-  ): void {
+  private drawHead(heads: number[], world: World): void {
     const ctx = this.ctx
     const dir = world.input.current
     const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0
@@ -488,10 +555,12 @@ export class Renderer {
     const squash = 1 / stretch
     const r = CELL * 0.44
 
-    for (const h of mirrors(head)) {
-      this.drawUrgency(h.x, h.y, world)
+    for (let k = 0; k < heads.length; k += 2) {
+      const hx = heads[k] as number
+      const hy = heads[k + 1] as number
+      this.drawUrgency(hx, hy, world)
       ctx.save()
-      ctx.translate(h.x, h.y)
+      ctx.translate(hx, hy)
       // Rotate into the direction of travel so squash and stretch align with
       // it, then scale, then draw everything in the head's local frame.
       ctx.rotate(Math.atan2(dy, dx))

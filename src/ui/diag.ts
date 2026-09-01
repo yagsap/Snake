@@ -17,7 +17,7 @@
  * it, so "the main thread blocked" becomes "the main thread blocked on this".
  */
 
-const STYLE = 'position:fixed;z-index:99;left:6px;top:6px;padding:6px 8px;' +
+const STYLE = 'position:fixed;z-index:99;left:6px;top:58px;padding:6px 8px;' +
   'background:rgba(10,14,28,.88);color:#D7F0E0;font:500 10px/1.45 ui-monospace,monospace;' +
   'border:1px solid #2A3660;border-radius:6px;pointer-events:none;white-space:pre'
 
@@ -27,7 +27,7 @@ const BLAME_WINDOW = 260
 export class Diag {
   /** Opt-in only: ?debug on the URL. Costs nothing when off. */
   static get enabled(): boolean {
-    return /[?&]debug\b/.test(location.search)
+    return true // TEMPORARY on-device diagnostic build
   }
 
   private el: HTMLElement
