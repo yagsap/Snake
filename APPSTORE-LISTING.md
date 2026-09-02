@@ -118,21 +118,31 @@ Audio: character pronunciations via the system text-to-speech engine
 a remote URL.
 ```
 
-## Screenshots
+## Screenshots — DONE
 
-Captured from the real app on an iPhone 16 Pro Max simulator at 1320×2868,
-which is the 6.9-inch set App Store Connect wants. One set is enough — smaller
-sizes are scaled from it. Suggested order:
+Five finished 1320x2868 PNGs (the 6.9-inch set, the only one App Store
+Connect requires — smaller sizes are scaled from it) are in
+`store-screenshots/`, captions already baked in. Upload in this order:
 
-1. Mid-run gameplay — the snake carrying earned characters, multiplier at ×5
-2. The menu — showing all seven languages
-3. The study chart — red borders on missed characters, green on solid
-4. The campaign list — levels, boss levels, stars
-5. Early gameplay — clean board, easy to read
+| File | Caption |
+|---|---|
+| `1-gameplay.png` | Hear a letter. / Eat the letter. |
+| `3-phonics.png` | b is for ball. / Sounds, not just names. |
+| `2-menu-ladder.png` | Always one / clear next step. |
+| `4-levels.png` | Letters, numbers, / and first words. |
+| `5-chart.png` | It knows what / they keep missing. |
 
-Caption ideas (App Store Connect lets you overlay text in the media manager,
-or leave them plain):
-1. "Hear a character. Eat the right one."
-2. "Seven writing systems."
-3. "It knows what you keep missing."
-4. "130 levels, from first letters to every lookalike."
+Gameplay leads because it shows the rule in one glance. Phonics is second
+because it is the strongest claim for the audience this listing is written
+for — most alphabet apps drill letter NAMES, and names do not help a child
+decode a word.
+
+Captured at 440x956 CSS pixels at 3x, which IS an iPhone 16 Pro Max, so the
+layout is the one a real phone renders rather than a desktop page scaled up.
+Verified against the same screens in the iOS Simulator.
+
+Note for a future pass: the app leaves a wide empty band above and below the
+menu card on a 6.9-inch phone — real, not a capture artefact, and confirmed
+in the Simulator. The screenshots hang the screen below a caption so the band
+reads as intentional padding, but the layout itself would be worth tightening
+for the largest phones.
