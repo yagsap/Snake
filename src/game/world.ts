@@ -74,6 +74,29 @@ export interface WorldOptions {
    * Learning stats are still RECORDED; they just don't steer selection.
    */
   neutral?: boolean
+  /**
+   * Longest the body may get. Undefined means unbounded, the classic rule.
+   *
+   * A learn level should test ONE thing: whether the child knows the letter.
+   * An unbounded snake quietly adds a second test — steering an ever-longer
+   * body with four-year-old motor control — and the better a child reads, the
+   * harder that second test gets. Capping it makes the steering load plateau
+   * so success stays about the reading. Boss levels leave it uncapped, where
+   * the challenge framing is earned.
+   */
+  maxLength?: number
+  /**
+   * Narrow the question after a miss instead of holding it steady.
+   *
+   * Off, a wrongly-bitten distractor is moved rather than removed, so guessing
+   * can never shrink the field — correct for a learner who could otherwise
+   * cheese the answer. On, the distractor is gone for this cue, so five
+   * choices become four, then three, then the answer standing alone. A child
+   * who cannot yet read is not cheating the system by needing the problem made
+   * smaller; that is what teaching IS. It is not free either: the miss costs
+   * the level's star and is recorded in the schedule like any other.
+   */
+  scaffold?: boolean
 }
 
 const idx = (x: number, y: number): number => y * BOARD.cells + x
@@ -105,6 +128,10 @@ export class World {
   target: string | null = null
   /** Seconds the current target has been on the board — drives the speed bonus. */
   targetAge = 0
+  /** See WorldOptions.maxLength. */
+  readonly maxLength: number | undefined
+  /** See WorldOptions.scaffold. */
+  readonly scaffold: boolean
 
   score = 0
   /** Characters correctly eaten. Drives the pace ramp; also the learning stat. */
@@ -150,6 +177,8 @@ export class World {
     this.words = opts.words?.length ? opts.words : null
     this.reverse = opts.reverse ?? false
     this.rng = new Rng(opts.seed)
+    this.maxLength = opts.maxLength
+    this.scaffold = opts.scaffold ?? false
     this.deckRng = new Rng((this.rng.seed ^ 0x51ab3c7) >>> 0)
     this.selectionStats = opts.neutral ? {} : opts.stats
     this.input = new DirectionBuffer('right')
@@ -329,6 +358,13 @@ export class World {
       if (hit.correct) {
         newHead.ch = hit.ch
         this.snake.unshift(newHead)
+        // At the cap the body stops lengthening: the oldest carried character
+        // scrolls off the tail instead. The bite still counts for everything
+        // that matters — score, streak, the schedule — it just stops adding
+        // steering difficulty the child did nothing to earn.
+        if (this.maxLength !== undefined && this.snake.length > this.maxLength) {
+          this.snake.pop()
+        }
         this.onCorrect(hit)
       } else {
         this.snake.unshift(newHead)
@@ -498,11 +534,12 @@ export class World {
       targetSound: target ? (this.table[target] ?? '') : '',
     })
 
-    // Move the bitten distractor elsewhere instead of removing it: keeping the
-    // same five options on the board means the question stays as hard as it
-    // was, so a wrong guess cannot be used to narrow the field.
+    // Normally the bitten distractor is MOVED rather than removed: keeping the
+    // same five options means the question stays as hard as it was, so a wrong
+    // guess cannot be used to narrow the field. Under `scaffold` it is removed
+    // for good, which is the point — see WorldOptions.scaffold.
     this.items.splice(hitIndex, 1)
-    const spot = this.firstFreeCell()
+    const spot = this.scaffold ? null : this.firstFreeCell()
     if (spot) {
       this.items.push({
         x: spot.x,

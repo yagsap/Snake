@@ -95,6 +95,10 @@ interface RunConfig {
   earOnly: boolean
   /** Cue is a spoken keyword and the answer is its first letter. */
   phonics: boolean
+  /** Cap on body length; undefined leaves the classic unbounded snake. */
+  maxLength?: number
+  /** Narrow the board after a miss — see WorldOptions.scaffold. */
+  scaffold: boolean
   obstacles: ReadonlySet<number> | null
   level: LevelSpec | null
   levelIndex: number
@@ -113,6 +117,7 @@ function endlessRun(): RunConfig {
     reverse: false,
     earOnly: false,
     phonics: false,
+    scaffold: false,
     obstacles: null,
     level: null,
     levelIndex: -1,
@@ -130,6 +135,22 @@ function dailyRun(): RunConfig {
   }
 }
 
+/**
+ * Which levels are allowed to defeat the player.
+ *
+ * Only boss levels. A learn level exists to teach a letter, and a child who
+ * gets three wrong in a row needs the problem narrowed, not the run taken
+ * away — the board already does the narrowing, because a wrongly-bitten tile
+ * is removed and not replaced, so five choices become four, then three, then
+ * the answer alone. Ending the level on top of that punishes exactly the
+ * child the app is for. Misses still cost the star, and the schedule still
+ * records every one of them honestly.
+ */
+const isBoss = (level: LevelSpec): boolean => level.kind === 'gauntlet'
+
+/** Body cap for learn levels — see WorldOptions.maxLength. */
+const LEARN_MAX_LENGTH = 8
+
 /** Levels reuse the Mode shape — rules are rules, endless or campaign. */
 function levelMode(level: LevelSpec): Mode {
   return {
@@ -145,11 +166,15 @@ function levelRun(level: LevelSpec, index: number): RunConfig {
   return {
     table: level.table ?? tableFromChars(data.lang, level.chars),
     mode: levelMode(level),
+    ...(isBoss(level) ? {} : { maxLength: LEARN_MAX_LENGTH }),
+    scaffold: !isBoss(level),
     words: level.words ?? null,
     reverse: level.kind === 'reverse',
     earOnly: level.kind === 'ear',
     phonics: level.kind === 'phonics',
-    obstacles: level.layout ? layoutCells(level.layout) : null,
+    // Stones are a boss-level hazard. In a learn level they are one more way
+    // to lose that has nothing to do with reading a character.
+    obstacles: level.layout && isBoss(level) ? layoutCells(level.layout) : null,
     level,
     levelIndex: index,
     daily: false,
@@ -287,6 +312,8 @@ function makePlayScene(r: RunConfig): Scene {
         mode: r.mode,
         ...(r.words ? { words: r.words } : {}),
         ...(r.obstacles ? { obstacles: r.obstacles } : {}),
+        ...(r.maxLength !== undefined ? { maxLength: r.maxLength } : {}),
+        scaffold: r.scaffold,
         reverse: r.reverse,
         ...(r.seed !== undefined ? { seed: r.seed } : {}),
         // The daily is the same test for everyone: selection must not read
@@ -472,7 +499,7 @@ function makePlayScene(r: RunConfig): Scene {
               )
             }
           }
-          if (r.level && w.mistakes > r.level.goal.maxMisses) {
+          if (r.level && isBoss(r.level) && w.mistakes > r.level.goal.maxMisses) {
             finishLevel(r, w, false)
           }
         }),
