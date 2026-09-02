@@ -308,10 +308,16 @@ export class CampaignView {
         const { fresh, revised } = levelChars(data.lang, i)
         const cap = (a: string[], n: number) =>
           a.slice(0, n).join('') + (a.length > n ? '…' : '')
+        // When a level introduces nothing new — a counting or listening level
+        // built entirely from characters already taught — its whole set is
+        // "revised", and rendering that as "+一二三四五" leaves a plus sign
+        // with nothing in front of it to add to. Show them plainly instead.
         const glyphs = lvl.words
           ? lvl.words.map((e) => e.w).slice(0, 4).join(' ')
-          : cap(fresh, 10) +
-            (revised.length ? `<em>+${cap(revised, 8)}</em>` : '')
+          : fresh.length === 0
+            ? cap(revised, 10)
+            : cap(fresh, 10) +
+              (revised.length ? `<em>+${cap(revised, 8)}</em>` : '')
         // Spoken label, for a player who cannot read the row. The number
         // first, because that is how a child refers to where they are.
         const say = unlocked
