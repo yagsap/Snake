@@ -43,6 +43,20 @@ export interface MenuCallbacks {
   onLearn(): void
 }
 
+/**
+ * A few real characters from the script, for the picker.
+ *
+ * A child choosing what to learn cannot evaluate the word "Devanagari", and
+ * "हिन्दी" only helps if they can already read it. Three glyphs from the first
+ * set answer the question the label cannot: THIS is what you would be
+ * learning. Taken from the front of the first set, which is where every
+ * campaign starts, so the sample is also literally the first lesson.
+ */
+export function sampleGlyphs(id: LangId, n = 3): string {
+  const first = Object.values(LANGUAGES[id].sets)[0] ?? {}
+  return Object.keys(first).slice(0, n).join('')
+}
+
 export class MenuView {
   private root = $('menuScr')
   private langGrid = $('langGrid')
@@ -161,7 +175,7 @@ export class MenuView {
 
     this.langGrid.innerHTML = LANG_IDS.map((id) => {
       const [native, english] = LANGUAGES[id].labels
-      return `<button class="chip ${id === data.lang ? 'on' : ''}" data-lang="${id}"><b>${native}</b><span>${english}</span></button>`
+      return `<button class="chip ${id === data.lang ? 'on' : ''}" data-lang="${id}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
     }).join('')
     for (const btn of this.langGrid.querySelectorAll<HTMLElement>('[data-lang]')) {
       btn.addEventListener('click', () => this.cb.onLang(btn.dataset.lang as LangId))
@@ -572,7 +586,7 @@ export class OnboardView {
     const grid = $('onboardGrid')
     grid.innerHTML = LANG_IDS.map((id) => {
       const [native, english] = LANGUAGES[id].labels
-      return `<button class="chip" data-lang="${id}"><b>${native}</b><span>${english}</span></button>`
+      return `<button class="chip" data-lang="${id}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
     }).join('')
     grid.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')

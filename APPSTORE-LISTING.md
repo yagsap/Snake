@@ -16,70 +16,76 @@ Japanese, Chinese and Korean depth — so the subtitle must carry that, and does
 ## Subtitle (30 max)
 
 ```
-Kana, hanzi, Greek & Cyrillic
+Letters, numbers, first words
 ```
-[29] — deliberately NOT a restatement of the mechanic here. Paired with a name
-this plain, the subtitle's job is to say "this is not a toddler ABC app" and to
-pick up the script keywords the name cannot. If the listing ever gets a more
-distinctive name, swap back to the mechanic: `Eat the letter you hear` [23].
+[29] — the audience is CHILDREN learning to read, so the subtitle names what a
+parent is buying in plain words. The previous version, `Kana, hanzi, Greek &
+Cyrillic`, was written for an adult self-studier: it reads as a linguistics
+shelf, and a parent scanning the store does not know what a hanzi is. The
+script names now live in the description, where there is room to say them
+without being the first thing anyone sees.
 
 ## Promotional text (170 max, editable without review)
 
 ```
-Seven writing systems, 130 levels. Learn to read English, Japanese, Chinese, Russian, Hindi, Korean and Greek characters by ear — one snake run at a time.
+Hear a letter, eat the letter. Kids learn the alphabet, numbers 1 to 10 and their first words — in English, Japanese, Chinese, Russian, Hindi, Korean or Greek.
 ```
-[152]
+[159]
 
 ## Description (4000 max)
 
 ```
-Snake, but the food is a writing system.
+Snake, but the food is the alphabet.
 
-You hear a character. Five appear on the board. Eat the right one.
+Your child hears a letter. Five appear on the board. They eat the right one.
 
-That single rule turns the oldest phone game into the most effective way to
-drill an unfamiliar alphabet: you are not tapping flashcards, you are steering
-a snake under time pressure while your brain does the recognition work.
+That one rule turns the oldest phone game into reading practice kids ask to
+do again. Nothing to type, nothing to read first — if they can hear it and
+steer, they can play it.
 
-SEVEN WRITING SYSTEMS
-• English — the alphabet by letter name, capitals and small
-• Japanese — hiragana, katakana, and the voiced rows
-• Chinese — HSK-1 hanzi
-• Russian — the full Cyrillic alphabet
-• Hindi — Devanagari vowels and consonants
-• Korean — Hangul letters and syllables
-• Greek — capitals and small letters
+WHAT THEY LEARN
+• Letters — capitals and small, one small group at a time
+• Numbers — counting to five, then all ten
+• First words — animals, fruit and veg, colours, spelled out letter by letter
+• And six more writing systems when they are ready: Japanese kana, Chinese
+  characters, Russian, Hindi, Korean and Greek
 
-BUILT TO ACTUALLY TEACH
-The wrong answers are not random. They are the characters you genuinely mix
-up — シ against ツ, b against d, ε against σ, ば against ぱ. Eliminating four
-obviously-wrong shapes teaches you nothing, so the game never offers that. It
-also tracks every character you miss and asks about those more often.
+A LADDER, NOT A PILE
+Levels go in order and unlock as they are cleared, so there is always exactly
+one next thing to do. Every level shows the characters it teaches, and the
+menu shows how far up the ladder they have climbed.
 
-130 CAMPAIGN LEVELS
-Learn a row at a time, then face a boss level built entirely from one family of
-lookalikes. Spell real words by eating their characters in order. Flip the
-question around and recall the character from its sound. Or turn the text off
-entirely and play by ear.
+IT PAYS ATTENTION
+The wrong answers are not random — they are the letters children genuinely mix
+up: b against d, p against q, 6 against 9. Miss one and the letter you wanted
+jumps up and waves so they see which it was. It remembers every letter they
+miss and brings it back before they forget it, and it eases off the ones they
+already know.
 
-ALSO
-• Endless mode with three rule sets
-• A daily challenge — same board for everyone, every day
-• A study chart that shows exactly which characters you keep missing
-• Fully offline. No account, no ads, no tracking, no data collected.
+KIND BY DESIGN
+No walls to crash into and no way to lose by fumbling a turn — the only thing
+being tested is whether they know the letter. Play at a steady pace, or speed
+it up when that gets easy.
+
+FOR PARENTS
+Fully offline. No account, no ads, no tracking, no data collected, nothing to
+buy inside. A study chart shows exactly which letters they keep missing.
 ```
 
 ## Keywords (100 max, comma-separated, no spaces after commas)
 
 ```
-alphabet,kana,hiragana,katakana,hanzi,cyrillic,devanagari,hangul,greek,learn,letters,language,phonics,snake
+kids,children,abc,alphabet,letters,numbers,counting,phonics,reading,preschool,kana,hangul,greek
 ```
-[131 — trim to fit; drop `phonics,snake` → 118, then `devanagari` → 107, then `hanzi` → 100]
+[95] — leads with the words a parent types. The script names that will not fit
+(hiragana, cyrillic, devanagari, hanzi) are all in the description, which is
+indexed for search too.
 
-Better fitting version [99]:
+Adult-learner variant, if the positioning ever changes back:
 ```
 alphabet,kana,hiragana,katakana,cyrillic,hangul,greek,learn,letters,language,reading,phonics,abc
 ```
+[99]
 
 ## Category
 

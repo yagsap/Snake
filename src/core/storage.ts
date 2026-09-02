@@ -1,4 +1,5 @@
 import { isLangId, type LangId } from '../data/scripts'
+import { CAMPAIGNS } from '../game/levels'
 import { isModeId, type ModeId } from '../game/modes'
 
 /**
@@ -154,7 +155,26 @@ function parseCampaign(raw: unknown): Record<string, LevelState> {
   for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!v || typeof v !== 'object') continue
     const o = v as Record<string, unknown>
-    out[id] = { cleared: bool(o['cleared'], false), perfect: bool(o['perfect'], false) }
+    const state = {
+      cleared: bool(o['cleared'], false),
+      perfect: bool(o['perfect'], false),
+    }
+    /**
+     * Levels used to be keyed by position (`en-5`). They are now keyed by
+     * title, so a save written under the old scheme is translated through the
+     * ladder as it stood — losing progress on a content update is bad, but
+     * silently awarding it to the WRONG level is worse, so anything that does
+     * not resolve to a real level is dropped rather than kept as a stray key.
+     */
+    const legacy = /^([a-z]{2})-(\d+)$/.exec(id)
+    if (legacy) {
+      const lang = legacy[1] as LangId
+      const idx = Number(legacy[2]) - 1
+      const level = CAMPAIGNS[lang]?.[idx]
+      if (level) out[level.id] = state
+      continue
+    }
+    out[id] = state
   }
   return out
 }

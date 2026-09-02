@@ -76,6 +76,8 @@
   /* system-ui first: it carries Greek and Cyrillic at a normal width and
      still falls through to the CJK faces, so every native name fits a third
      of a phone screen without truncating. */
+  .chip .sample{display:block;font:400 clamp(13px,4vw,17px)/1.2 var(--glyph);color:#9AD1B2;
+    letter-spacing:.12em;margin-top:3px;font-style:normal;white-space:nowrap;overflow:hidden}
   .chip b{display:block;font:500 clamp(12px,3.7vw,15px)/1.25 system-ui,var(--glyph);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chip span{font:400 10px var(--mono);color:var(--mist);display:block;overflow:hidden;text-overflow:ellipsis}
   .chip.on{border-color:var(--jade)}

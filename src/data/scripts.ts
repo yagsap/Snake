@@ -67,6 +67,49 @@ export const GREEK_LOWER = table(
   'αalpha βbeta γgamma δdelta εepsilon ζzeta ηeta θtheta ιiota κkappa λlambda μmu νnu ξxi οomicron πpi ρrho σsigma τtau υupsilon φphi χchi ψpsi ωomega',
 )
 
+/**
+ * Numbers.
+ *
+ * The cue speaks the GLYPH, not the romanisation, so a numeral is pronounced
+ * by the system voice in the language being learned — which makes one set per
+ * script correct for free. Where a script has its own numerals the script's
+ * own are used, because those are the shapes a reader has to know: kanji for
+ * Japanese and Chinese, Devanagari for Hindi, Sino-Korean syllables for
+ * Korean. English, Russian and Greek share the Arabic digits, and there the
+ * work is the spoken number rather than the shape — still worth a set, since
+ * for a child "how do you say 7" is exactly the lesson.
+ *
+ * Ten or eleven entries each: enough to fill a board without repeats, short
+ * enough to finish in one sitting.
+ */
+export const DIGITS_EN = table(
+  '0zero 1one 2two 3three 4four 5five 6six 7seven 8eight 9nine',
+)
+
+export const NUMBERS_JA = table(
+  '〇zero 一ichi 二ni 三san 四yon 五go 六roku 七nana 八hachi 九kyū 十jū',
+)
+
+export const NUMBERS_ZH = table(
+  '〇líng 一yī 二èr 三sān 四sì 五wǔ 六liù 七qī 八bā 九jiǔ 十shí',
+)
+
+export const DIGITS_RU = table(
+  '0nol 1odin 2dva 3tri 4chetyre 5pyat 6shest 7sem 8vosem 9devyat',
+)
+
+export const NUMBERS_HI = table(
+  '०shunya १ek २do ३tin ४chār ५pānch ६chhah ७sāt ८āth ९nau',
+)
+
+export const NUMBERS_KO = table(
+  '영yeong 일il 이i 삼sam 사sa 오o 육yuk 칠chil 팔pal 구gu 십sip',
+)
+
+export const DIGITS_EL = table(
+  '0midén 1éna 2dýo 3tría 4téssera 5pénte 6éxi 7eptá 8októ 9ennéa',
+)
+
 export const DEVANAGARI_VOWELS = table('अa आā इi ईī उu ऊū एe ऐai ओo औau')
 
 export const DEVANAGARI_CONSONANTS = table(
@@ -96,7 +139,7 @@ export const LANGUAGES = {
     tts: 'en',
     labels: ['English', 'A–Z'],
     chartColumns: 6,
-    sets: { capitals: LATIN_UPPER, small: LATIN_LOWER },
+    sets: { capitals: LATIN_UPPER, small: LATIN_LOWER, numbers: DIGITS_EN },
   },
   ja: {
     name: 'Japanese',
@@ -104,7 +147,7 @@ export const LANGUAGES = {
     tts: 'ja',
     labels: ['日本語', 'Japanese'],
     chartColumns: 5,
-    sets: { hiragana: HIRAGANA, katakana: KATAKANA },
+    sets: { hiragana: HIRAGANA, katakana: KATAKANA, numbers: NUMBERS_JA },
   },
   zh: {
     name: 'Chinese',
@@ -112,7 +155,7 @@ export const LANGUAGES = {
     tts: 'zh',
     labels: ['中文', 'Chinese'],
     chartColumns: 6,
-    sets: { 'hanzi (HSK 1)': HANZI },
+    sets: { 'hanzi (HSK 1)': HANZI, numbers: NUMBERS_ZH },
   },
   ru: {
     name: 'Russian',
@@ -120,7 +163,7 @@ export const LANGUAGES = {
     tts: 'ru',
     labels: ['Русский', 'Russian'],
     chartColumns: 6,
-    sets: { cyrillic: CYRILLIC },
+    sets: { cyrillic: CYRILLIC, numbers: DIGITS_RU },
   },
   hi: {
     name: 'Hindi',
@@ -128,7 +171,7 @@ export const LANGUAGES = {
     tts: 'hi',
     labels: ['हिन्दी', 'Hindi'],
     chartColumns: 5,
-    sets: { vowels: DEVANAGARI_VOWELS, consonants: DEVANAGARI_CONSONANTS },
+    sets: { vowels: DEVANAGARI_VOWELS, consonants: DEVANAGARI_CONSONANTS, numbers: NUMBERS_HI },
   },
   ko: {
     name: 'Korean',
@@ -136,7 +179,7 @@ export const LANGUAGES = {
     tts: 'ko',
     labels: ['한국어', 'Korean'],
     chartColumns: 6,
-    sets: { letters: HANGUL_JAMO, syllables: HANGUL_SYLLABLES },
+    sets: { letters: HANGUL_JAMO, syllables: HANGUL_SYLLABLES, numbers: NUMBERS_KO },
   },
   el: {
     name: 'Greek',
@@ -144,7 +187,7 @@ export const LANGUAGES = {
     tts: 'el',
     labels: ['Ελληνικά', 'Greek'],
     chartColumns: 6,
-    sets: { capitals: GREEK_UPPER, small: GREEK_LOWER },
+    sets: { capitals: GREEK_UPPER, small: GREEK_LOWER, numbers: DIGITS_EL },
   },
 } as const satisfies Record<string, Language>
 

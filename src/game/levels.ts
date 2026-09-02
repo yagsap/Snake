@@ -168,6 +168,8 @@ const ear = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => 
 
 const JA: Draft[] = [
   chapter('first vowels', 'あいうえお', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('count to five', '一二三四五', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('all ten numbers', '六七八九十〇一二三四五', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('the k row', 'かきくけこあいうえお'),
   chapter('the s row', 'さしすせそかきくけこ'),
   gauntlet('sneaky three', 'さきち'),
@@ -185,6 +187,12 @@ const JA: Draft[] = [
   chapter('the m row', 'まみむめもはひふへほ'),
   gauntlet('brush cousins', 'はほまめぬ', { goal: G(10, 2) }),
   chapter('y & r rows', 'やゆよらりるれろまみむめも', { layout: 'garden' }),
+  words('animals', [
+    { w: 'ねこ', gloss: 'cat' }, { w: 'いぬ', gloss: 'dog' },
+    { w: 'とり', gloss: 'bird' }, { w: 'うま', gloss: 'horse' },
+    { w: 'さる', gloss: 'monkey' }, { w: 'くま', gloss: 'bear' },
+    { w: 'きつね', gloss: 'fox' }, { w: 'うさぎ', gloss: 'rabbit' },
+  ]),
   reverse('recall: first half', 'あいうえおかきくけこさしすせそたちつてとなにぬねの'),
   chapter('w, wo, n', 'わをんやゆよらりるれろ'),
   words('more words', [
@@ -268,6 +276,8 @@ const ZH: Draft[] = [
 
 const RU: Draft[] = [
   chapter('familiar friends', 'АКМОТЕ', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('false friends', 'ВНРСУХАКМОТЕ'),
   gauntlet('lookalike pack', 'ВБНПР'),
   chapter('new shapes I', 'ГДЖЗЛВНРСУ', { layout: 'garden' }),
@@ -290,6 +300,8 @@ const RU: Draft[] = [
 
 const HI: Draft[] = [
   chapter('vowels I', 'अआइईउऊ', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('count to five', '१२३४५', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('all ten numbers', '६७८९०१२३४५', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('vowels II', 'एऐओऔअआइईउऊ'),
   gauntlet('vowel pairs', 'अआइईउऊएऐओऔ', { goal: G(12, 2) }),
   chapter('velars & palatals', 'कखगघचछजझ'),
@@ -315,6 +327,8 @@ const HI: Draft[] = [
 
 const EN: Draft[] = [
   chapter('A to E', 'ABCDE', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('F to J', 'FGHIJABCDE'),
   gauntlet('the bee family', 'BCDEGPTVZ', { goal: G(12, 2) }),
   chapter('K to O', 'KLMNOFGHIJ', { layout: 'garden' }),
@@ -326,6 +340,12 @@ const EN: Draft[] = [
   chapter('P to T', 'PQRSTKLMNO'),
   gauntlet('mirror shapes', 'OQPRBDUV'),
   chapter('U to Z', 'UVWXYZPQRST', { layout: 'torii' }),
+  words('animals', [
+    { w: 'FOX', gloss: 'fox' }, { w: 'OWL', gloss: 'owl' },
+    { w: 'PIG', gloss: 'pig' }, { w: 'COW', gloss: 'cow' },
+    { w: 'FROG', gloss: 'frog' }, { w: 'GOAT', gloss: 'goat' },
+    { w: 'BEAR', gloss: 'bear' }, { w: 'DUCK', gloss: 'duck' },
+  ]),
   reverse('recall: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
   ear('by ear: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', { goal: G(15, 4) }),
   words('longer words', [
@@ -333,6 +353,18 @@ const EN: Draft[] = [
     { w: 'HORSE', gloss: 'horse' }, { w: 'PLANT', gloss: 'plant' },
     { w: 'MUSIC', gloss: 'music' }, { w: 'CLOUD', gloss: 'cloud' },
     { w: 'SNAKE', gloss: 'you' },
+  ]),
+  words('fruit and veg', [
+    { w: 'PLUM', gloss: 'plum' }, { w: 'PEAR', gloss: 'pear' },
+    { w: 'CORN', gloss: 'corn' }, { w: 'LIME', gloss: 'lime' },
+    { w: 'MANGO', gloss: 'mango' }, { w: 'LEMON', gloss: 'lemon' },
+    { w: 'GRAPE', gloss: 'grape' }, { w: 'BEAN', gloss: 'bean' },
+  ]),
+  words('colours', [
+    { w: 'RED', gloss: 'red' }, { w: 'PINK', gloss: 'pink' },
+    { w: 'BLUE', gloss: 'blue' }, { w: 'GOLD', gloss: 'gold' },
+    { w: 'GREY', gloss: 'grey' }, { w: 'BLACK', gloss: 'black' },
+    { w: 'WHITE', gloss: 'white' }, { w: 'BROWN', gloss: 'brown' },
   ]),
   chapter('small letters', 'abcdefghij'),
   gauntlet('b d p q', 'bdpq', { goal: G(12, 2), paceScale: 1.1 }),
@@ -353,6 +385,8 @@ const EN: Draft[] = [
 
 const KO: Draft[] = [
   chapter('first consonants', 'ㄱㄴㄷㄹㅁ', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('count to five', '일이삼사오', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('all ten numbers', '육칠팔구십영일이삼사오', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('more consonants', 'ㅂㅅㅇㅈㅎㄱㄴㄷㄹㅁ'),
   chapter('the aspirated', 'ㅋㅌㅍㅊㄱㄷㅂㅈ', { layout: 'garden' }),
   gauntlet('one more stroke', 'ㄱㅋㄷㅌㅂㅍㅈㅊ', { goal: G(12, 2) }),
@@ -381,6 +415,8 @@ const KO: Draft[] = [
 
 const EL: Draft[] = [
   chapter('alpha to epsilon', 'ΑΒΓΔΕ', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
+  chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('zeta to kappa', 'ΖΗΘΙΚΑΒΓΔΕ'),
   chapter('lambda to xi', 'ΛΜΝΞΖΗΘΙΚ', { layout: 'garden' }),
   gauntlet('the i sounds', 'ΗΙΥΕΟ', { goal: G(12, 2) }),
@@ -410,12 +446,33 @@ const DRAFTS: Record<LangId, Draft[]> = {
   en: EN, ja: JA, zh: ZH, ru: RU, hi: HI, ko: KO, el: EL,
 }
 
+/**
+ * A level's id is derived from its TITLE, not its position.
+ *
+ * Progress is stored per id, so index-based ids (`en-5`) meant that inserting
+ * a level anywhere but the end silently handed every later level someone
+ * else's cleared flag — add a numbers level at position three and a player
+ * wakes up having "cleared" a boss they never saw, with the real one locked.
+ * Keying on the title makes content updates safe to place where they teach
+ * best. `parseCampaign` migrates saves written under the old scheme.
+ */
+const slug = (t: string): string =>
+  t
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
 export const CAMPAIGNS: Record<LangId, LevelSpec[]> = Object.fromEntries(
   (Object.keys(DRAFTS) as LangId[]).map((lang) => [
     lang,
-    DRAFTS[lang].map((d, i) => ({ ...d, id: `${lang}-${i + 1}` })),
+    DRAFTS[lang].map((d) => ({ ...d, id: `${lang}-${slug(d.title)}` })),
   ]),
 ) as Record<LangId, LevelSpec[]>
+
+/** Old index-based id for level `i`, so saved progress can be carried over. */
+export function legacyLevelId(lang: LangId, index: number): string {
+  return `${lang}-${index + 1}`
+}
 
 /**
  * The characters a level introduces, separated from the ones it merely revises.
