@@ -312,6 +312,7 @@ function makePlayScene(r: RunConfig): Scene {
         w.events.on('mastered', ({ item, ch }) => {
           const c = renderer.centerOf(item)
           renderer.sprites.cheer(c.x, c.y)
+          renderer.cheerItems()
           haptic.multiplier()
           tones.mastered()
           renderer.flash.fire(THEME.gold, 0.08)
@@ -358,6 +359,7 @@ function makePlayScene(r: RunConfig): Scene {
             run?.reverse ? w.soundOf(item.ch) || item.ch : item.ch,
             THEME.washi, CELL * 0.7, v.x, v.y,
           )
+          renderer.shock(c.x, c.y, CELL * 0.5)
           renderer.fx.ring(c.x, c.y, THEME.jade, JUICE.ringLife)
           renderer.fx.burst(c.x, c.y, THEME.jadeBright, 10, 240, v.x, v.y)
           renderer.fx.text(c.x, c.y, `+${award.points}`, THEME.jadeBright)
@@ -393,6 +395,8 @@ function makePlayScene(r: RunConfig): Scene {
           renderer.fx.glyphPop(
             c.x, c.y, item.ch, THEME.shuSoft, CELL * 0.62, -v.x, -v.y,
           )
+          // A miss hits harder than a hit: the whole board flinches.
+          renderer.shock(c.x, c.y, CELL * 0.85)
           renderer.fx.ring(c.x, c.y, THEME.shu, JUICE.wrongRingLife)
           renderer.fx.burst(c.x, c.y, THEME.shuSoft, 8, 200, v.x, v.y)
           // The teaching moment: what you bit, and what was wanted.

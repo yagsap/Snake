@@ -97,6 +97,14 @@ export class Renderer {
   private mirrorBuf: number[] = []
   /** Reused spline-segment buffer, six numbers per stroke; see drawSnake. */
   private segBuf: number[] = []
+  /**
+   * Shockwaves the characters ride out. Each is an origin and a birth time;
+   * a tile reacts when the wave physically reaches it, so the board answers
+   * a bite in sequence rather than all at once.
+   */
+  private shocks: Array<{ x: number; y: number; born: number; strength: number }> = []
+  /** Clock time until which every tile is celebrating. */
+  private cheerUntil = 0
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
@@ -178,6 +186,23 @@ export class Renderer {
   }
 
   /**
+   * A wave rolls out from a point and shoves the characters aside as it
+   * passes. The tiles are literally the distractors — without a reaction
+   * they are furniture, and the moment a bite lands is the moment the board
+   * has something to say about it.
+   */
+  shock(x: number, y: number, strength: number): void {
+    if (this.fx.intensity <= 0) return
+    this.shocks.push({ x, y, born: this.clock, strength })
+  }
+
+  /** Mastery: every character on the board hops for you. */
+  cheerItems(): void {
+    if (this.fx.intensity <= 0) return
+    this.cheerUntil = this.clock + 1.1
+  }
+
+  /**
    * View-only animation, driven by REAL time so juice keeps breathing during
    * hit-stop and while the game is paused.
    */
@@ -185,6 +210,12 @@ export class Renderer {
     this.clock += realDt
     this.camera.update(realDt)
     this.sprites.update(realDt)
+    // A wave is done once it has crossed the board and its pulse has passed.
+    for (let i = this.shocks.length - 1; i >= 0; i--) {
+      if (this.clock - (this.shocks[i] as { born: number }).born > 1.4) {
+        this.shocks.splice(i, 1)
+      }
+    }
     this.fx.update(realDt)
     this.wake.update(realDt)
     this.flash.update(realDt)
@@ -289,8 +320,66 @@ export class Renderer {
        */
       const bob = Math.sin(t * 1.7 + it.phase) * 3.4
       const sway = Math.cos(t * 1.13 + it.phase * 1.7) * 2.4
-      const tilt = Math.sin(t * 0.87 + it.phase * 2.3) * 0.075
-      const breath = 1 + Math.sin(t * 2.3 + it.phase * 0.7) * 0.04
+      let tilt = Math.sin(t * 0.87 + it.phase * 2.3) * 0.075
+      let breath = 1 + Math.sin(t * 2.3 + it.phase * 0.7) * 0.04
+
+      const cx0 = it.x * CELL + CELL / 2
+      const cy0 = it.y * CELL + CELL / 2
+      let push = 0
+      let pushX = 0
+      let pushY = 0
+
+      /**
+       * SHOCKWAVES. A bite sends a wave rolling out from where it landed,
+       * and each character is shoved aside as the wave physically reaches
+       * it — so the board answers in sequence, outward, instead of twitching
+       * all at once. Distance both delays the reaction and softens it.
+       */
+      for (const s of this.shocks) {
+        const dx = cx0 - s.x
+        const dy = cy0 - s.y
+        const d = Math.hypot(dx, dy)
+        const local = t - s.born - d / 900
+        if (local <= 0 || local >= 0.36) continue
+        const amp =
+          Math.sin((local / 0.36) * Math.PI) * s.strength / (1 + d / (CELL * 4))
+        pushX += (dx / (d || 1)) * amp
+        pushY += (dy / (d || 1)) * amp
+        push += Math.abs(amp)
+      }
+
+      /**
+       * DODGE. Characters lean away from the head as it bears down on them.
+       * Distance-based and applied to every tile alike, so it never betrays
+       * which one is the answer — it just means the board is aware of the
+       * snake instead of ignoring it.
+       */
+      const head = world.snake[0]
+      if (head) {
+        const hx = head.x * CELL + CELL / 2
+        const hy = head.y * CELL + CELL / 2
+        const dx = cx0 - hx
+        const dy = cy0 - hy
+        const d = Math.hypot(dx, dy)
+        const reach = CELL * 2.6
+        if (d < reach) {
+          const near = 1 - d / reach
+          const lean = near * near * CELL * 0.3
+          pushX += (dx / (d || 1)) * lean
+          pushY += (dy / (d || 1)) * lean
+          tilt += (dx / (d || 1)) * near * 0.18
+          breath -= near * 0.06
+        }
+      }
+
+      /** CHEER. On a mastery every character on the board hops for you. */
+      if (t < this.cheerUntil) {
+        const left = this.cheerUntil - t
+        const hop = Math.sin((1.1 - left) * 14 + it.phase * 2) * left * 9
+        pushY -= Math.abs(hop)
+        tilt += Math.sin((1.1 - left) * 9 + it.phase) * left * 0.2
+        breath += left * 0.08
+      }
 
       /**
        * Entry: the tile drops in and rights itself. easeOutBack overshoots the
@@ -322,8 +411,8 @@ export class Renderer {
       const size = (world.reverse ? CELL * 0.46 : CELL * 0.88) * scale
 
       ctx.save()
-      ctx.translate(x + sway, y + bob + drop)
-      ctx.rotate(tilt + spin)
+      ctx.translate(x + sway + pushX, y + bob + drop + pushY)
+      ctx.rotate(tilt + spin + push * 0.012)
       // The shadow drifts FURTHER than the glyph as it rises: parallax is
       // what turns a bob into height above the water rather than a wobble.
       const lift = 1 + (bob + drop) * -0.06
