@@ -22,6 +22,16 @@ export interface CharStat {
   ok: number
   err: number
   /**
+   * Spaced repetition, the part that makes this a learning app rather than a
+   * quiz. `box` is the Leitner rung (0..5) and `due` the epoch-ms when this
+   * character should next be asked. Without a clock, a character answered
+   * correctly three times two minutes ago looked identical to one answered
+   * correctly three times last week — so nothing could ever be scheduled,
+   * and nothing could ever be forgotten. Both absent until first answered.
+   */
+  box?: number
+  due?: number
+  /**
    * The confusion matrix, one row: when THIS character was asked for, which
    * characters were bitten instead, and how often. `err` says you struggle
    * with a character; this says what you mistake it FOR — which is what lets
@@ -36,8 +46,22 @@ export interface LevelState {
   perfect: boolean
 }
 
+/**
+ * The bullseye: what this player is actually here to learn. Set once at
+ * onboarding and shown on every open, so the app opens on a target rather
+ * than on a menu of everything it could possibly do.
+ */
+export interface Focus {
+  lang: LangId
+  setName: string
+  /** When the goal was set — the "learning since" date on the menu. */
+  startedAt: number
+}
+
 export interface SaveData {
   stats: Record<string, CharStat>
+  /** The current learning goal, or null for a player who predates it. */
+  focus: Focus | null
   bestScore: number
   bestEaten: number
   /** Campaign progress by level id. */
@@ -62,6 +86,7 @@ export interface SaveData {
 
 const defaults = (): SaveData => ({
   stats: {},
+  focus: null,
   bestScore: 0,
   bestEaten: 0,
   campaign: {},
@@ -92,6 +117,8 @@ function parseStats(raw: unknown): Record<string, CharStat> {
       ok: Math.max(0, num(v['ok'])),
       err: Math.max(0, num(v['err'])),
     }
+    if (typeof v['box'] === 'number') stat.box = Math.max(0, Math.min(5, num(v['box'])))
+    if (typeof v['due'] === 'number') stat.due = num(v['due'])
     const conf = v['confused']
     if (conf && typeof conf === 'object') {
       const confused: Record<string, number> = {}
@@ -104,6 +131,17 @@ function parseStats(raw: unknown): Record<string, CharStat> {
     out[ch] = stat
   }
   return out
+}
+
+function parseFocus(raw: unknown): Focus | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (!isLangId(o['lang'])) return null
+  return {
+    lang: o['lang'],
+    setName: typeof o['setName'] === 'string' ? o['setName'] : '',
+    startedAt: Math.max(0, num(o['startedAt'])),
+  }
 }
 
 function parseCampaign(raw: unknown): Record<string, LevelState> {
@@ -148,6 +186,7 @@ export function load(): SaveData {
 
   return {
     stats: parseStats(d['stats']),
+    focus: parseFocus(d['focus']),
     bestScore: Math.max(0, num(d['bestScore'])),
     // v1 stored the eaten count under `best`; carry it forward rather than
     // silently resetting a returning player's record to zero.

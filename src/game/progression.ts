@@ -31,6 +31,58 @@ export function paceProgress(interval: number): number {
 }
 
 /**
+ * Spaced repetition — the Leitner ladder, in real time.
+ *
+ * Each rung is how long a correct answer buys before the character is asked
+ * again. The early rungs are minutes because a character met once is not
+ * learned yet; the late ones are weeks because one that survived a week is.
+ * A miss knocks it down a rung and brings it back almost immediately, which
+ * is the whole point: the app should spend its time on what you are about to
+ * forget, not on what you already know.
+ */
+const BOXES_MS = [
+  10 * 60_000, // 10 minutes — same session
+  24 * 3_600_000, // 1 day
+  3 * 24 * 3_600_000,
+  7 * 24 * 3_600_000,
+  21 * 24 * 3_600_000,
+  60 * 24 * 3_600_000,
+] as const
+
+/** Rung a character must survive to count as mastered — a multi-day gap. */
+const MASTERY_BOX = 3
+
+/** Promote after a correct answer: up a rung, next review pushed out. */
+export function promote(s: CharStat, now: number): void {
+  s.box = Math.min(BOXES_MS.length - 1, (s.box ?? -1) + 1)
+  s.due = now + (BOXES_MS[s.box] as number)
+}
+
+/** Demote after a miss: down a rung, back within the session. */
+export function demote(s: CharStat, now: number): void {
+  s.box = Math.max(0, (s.box ?? 1) - 1)
+  s.due = now + 60_000
+}
+
+/** Seed a character the player says they already know, without pretending
+ *  they proved it here — one rung below mastery, due in a day. */
+export function seedKnown(s: CharStat, now: number): void {
+  s.box = MASTERY_BOX - 1
+  s.due = now + BOXES_MS[MASTERY_BOX - 1]!
+}
+
+/** Is this character due for review? Never-seen characters are always due. */
+export function isDue(s: CharStat | undefined, now: number): boolean {
+  return !s || s.due === undefined || s.due <= now
+}
+
+/** How overdue, in ms. Negative means not yet due. Drives review ordering. */
+export function overdueBy(s: CharStat | undefined, now: number): number {
+  if (!s || s.due === undefined) return Number.MAX_SAFE_INTEGER
+  return now - s.due
+}
+
+/**
  * Mastery, in ONE place — the chart, the mid-run celebration and the run
  * receipt must never disagree about what "mastered" means.
  *
@@ -41,6 +93,10 @@ export function paceProgress(interval: number): number {
  * never be celebrated, no matter how solid they became.
  */
 export function isMastered(s: CharStat): boolean {
+  // The box is the honest test: reaching MASTERY_BOX means the character was
+  // recalled correctly after days away, not three times inside one lucky run.
+  // The hit-count rule stays as the floor for saves that predate scheduling.
+  if (s.box !== undefined) return s.box >= MASTERY_BOX
   return s.ok >= SPAWN.masteredAt && s.ok >= s.err * 3
 }
 

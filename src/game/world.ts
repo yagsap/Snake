@@ -5,7 +5,14 @@ import type { CharStat } from '../core/storage'
 import type { CharTable } from '../data/scripts'
 import { BOARD, SNAKE, SPAWN } from './config'
 import type { Mode } from './modes'
-import { awardFor, isMastered, moveInterval, type Award } from './progression'
+import {
+  awardFor,
+  demote,
+  isMastered,
+  moveInterval,
+  promote,
+  type Award,
+} from './progression'
 import { chooseDistractors, chooseTarget, freeCells } from './spawn'
 import { confusablesOf } from '../data/scripts'
 import type { WordEntry } from './levels'
@@ -406,6 +413,9 @@ export class World {
     const stat = this.statFor(item.ch)
     const wasMastered = isMastered(stat)
     stat.ok += 1
+    // Schedule it forward: correct here buys a longer gap before it is asked
+    // again, which is what turns practice into retention.
+    promote(stat, Date.now())
     this.runLearned.add(item.ch)
     this.setInterval(moveInterval(this.eaten, this.mode))
 
@@ -459,7 +469,10 @@ export class World {
 
     const target = this.target
     if (target) {
-      this.statFor(target).err += 1
+      const ts = this.statFor(target)
+      ts.err += 1
+      // Missed: back down a rung and due again within the minute.
+      demote(ts, Date.now())
       this.runErrors.set(target, (this.runErrors.get(target) ?? 0) + 1)
     }
     this.statFor(item.ch).err += 1
@@ -573,6 +586,7 @@ export class World {
       this.selectionStats,
       this.deckRng,
       this.lastTarget,
+      Date.now(),
     )
     if (!target) return
     this.target = target

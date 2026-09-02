@@ -2,6 +2,7 @@ import type { Rng } from '../core/rng'
 import type { CharStat } from '../core/storage'
 import { confusablesOf, type CharTable } from '../data/scripts'
 import { SPAWN } from './config'
+import { isDue, overdueBy } from './progression'
 
 /**
  * Choosing what to put on the board.
@@ -28,20 +29,41 @@ export function chooseTarget(
   stats: Record<string, CharStat>,
   rng: Rng,
   avoid: string | null,
+  /** Epoch ms, passed in rather than read here: selection must not hide a
+   *  clock. The daily challenge's determinism guarantee depends on this
+   *  function being a pure function of its arguments, and a hidden Date.now()
+   *  also makes the schedule untestable. */
+  now: number,
 ): string | null {
   let chars = Object.keys(table)
   if (!chars.length) return null
   // Never ask the same thing twice in a row — the answer is still on screen.
   if (avoid && chars.length > 1) chars = chars.filter((c) => c !== avoid)
 
-  const weights = chars.map((c) => {
+  /**
+   * Due characters first. A character whose review time has arrived is, by
+   * definition, the one closest to being forgotten — asking anything else
+   * spends the session on material that is not at risk. Never-seen
+   * characters count as due, so new material still enters naturally.
+   * When nothing is due the old error/mastery bias takes over, so a player
+   * who keeps playing past their review queue still gets a sensible game.
+   */
+  const due = chars.filter((c) => isDue(stats[c], now))
+  const pool = due.length ? due : chars
+
+  const weights = pool.map((c) => {
     const s = statOf(stats, c)
-    return Math.max(
+    const base = Math.max(
       SPAWN.floorWeight,
       1 + SPAWN.errorWeight * s.err - SPAWN.masteryWeight * s.ok,
     )
+    if (!due.length) return base
+    // Among due items, the most overdue leads — capped so a character left
+    // for a month cannot crowd out everything else in the queue.
+    const days = Math.min(14, overdueBy(stats[c], now) / 86_400_000)
+    return base * (1 + Math.max(0, days))
   })
-  return rng.weighted(chars, weights) ?? (chars[0] as string)
+  return rng.weighted(pool, weights) ?? (pool[0] as string)
 }
 
 /** How many distractor slots the player's own confusion history may claim. */
