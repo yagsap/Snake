@@ -366,6 +366,13 @@ export class World {
           this.snake.pop()
         }
         this.onCorrect(hit)
+        // Consume the tile. Outside a word level `onCorrect` rebuilds the
+        // board and this finds nothing; inside one the board persists between
+        // letters, and the letter just eaten would otherwise sit there as a
+        // now-incorrect tile directly under the head — a penalty trap made out
+        // of the answer the child had just got right.
+        const eatenAt = this.items.indexOf(hit)
+        if (eatenAt >= 0) this.items.splice(eatenAt, 1)
       } else {
         this.snake.unshift(newHead)
         this.onWrong(hit, hitIndex)
@@ -486,6 +493,22 @@ export class World {
         this.target = this.word.w[this.wordIndex] ?? null
         this.targetAge = 0
         for (const it of this.items) it.correct = it.ch === this.target
+        // Belt and braces: whatever else happened to the board, the letter the
+        // word now needs must be ON it. Without this the level can only be
+        // abandoned, never finished — a dead end with no error and no exit.
+        if (this.target !== null && !this.items.some((it) => it.correct)) {
+          const spot = this.firstFreeCell()
+          if (spot) {
+            this.items.push({
+              x: spot.x,
+              y: spot.y,
+              ch: this.target,
+              correct: true,
+              phase: this.rng.range(0, Math.PI * 2),
+              age: 0,
+            })
+          }
+        }
         this.events.emit('wordProgress', {
           entry: this.word,
           index: this.wordIndex,
@@ -534,12 +557,24 @@ export class World {
       targetSound: target ? (this.table[target] ?? '') : '',
     })
 
-    // Normally the bitten distractor is MOVED rather than removed: keeping the
-    // same five options means the question stays as hard as it was, so a wrong
-    // guess cannot be used to narrow the field. Under `scaffold` it is removed
-    // for good, which is the point — see WorldOptions.scaffold.
+    /**
+     * Normally the bitten distractor is MOVED rather than removed: keeping the
+     * same five options means the question stays as hard as it was, so a wrong
+     * guess cannot be used to narrow the field. Under `scaffold` it is removed
+     * for good, which is the point — see WorldOptions.scaffold.
+     *
+     * EXCEPT in a word level, where the "distractors" are the word's own later
+     * letters. Deleting one there does not narrow the question, it destroys a
+     * future target: the board is not rebuilt between letters, so when the aim
+     * advanced to the deleted letter NO tile was correct, the word could never
+     * finish, and since a learn level no longer ends on misses the run was
+     * stuck forever. Biting a later letter of the word is an ordinary child
+     * mistake — exactly the mistake this mode exists to be kind about.
+     */
+    const stillNeeded =
+      this.word !== null && this.word.w.slice(this.wordIndex).includes(item.ch)
     this.items.splice(hitIndex, 1)
-    const spot = this.scaffold ? null : this.firstFreeCell()
+    const spot = this.scaffold && !stillNeeded ? null : this.firstFreeCell()
     if (spot) {
       this.items.push({
         x: spot.x,

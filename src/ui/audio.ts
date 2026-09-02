@@ -224,6 +224,17 @@ export class Speech {
     // A shade slower than an adult would read it, and no slower — children
     // tune out speech that sounds like it is being spelled at them.
     u.rate = 0.92
+    /**
+     * Hand completion back to the coalescer even though this is not a cue.
+     *
+     * `speak` stashes a cue in `pendingText` whenever the engine is busy, and
+     * only ever flushes it from an utterance's end handler. A UI phrase with
+     * no end handler is therefore a hole: touch a button, and the cue that
+     * arrives while it is talking is swallowed — then replayed later on top of
+     * a different question, which is worse than never playing it at all.
+     */
+    u.onend = () => this.finish(u)
+    u.onerror = () => this.finish(u)
     speechSynthesis.speak(u)
   }
 

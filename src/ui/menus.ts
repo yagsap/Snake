@@ -59,6 +59,56 @@ export function sampleGlyphs(id: LangId, n = 3): string {
   return Object.keys(first).slice(0, n).join('')
 }
 
+/**
+ * Require a deliberate three-second hold before firing.
+ *
+ * A native confirm() is not a gate for this audience: it is one more button,
+ * and a four-year-old dismisses it by hitting the bigger one. A hold cannot
+ * be done by accident, because letting go cancels — and the bar filling up is
+ * both the feedback for an adult and the "stop doing that" for a child.
+ */
+export function holdToConfirm(
+  el: HTMLElement,
+  idle: string,
+  active: string,
+  done: () => void,
+  ms = 3000,
+): void {
+  let start = 0
+  let raf = 0
+  const paint = (p: number) => {
+    el.style.setProperty('--hold', `${Math.round(p * 100)}%`)
+    el.classList.toggle('holding', p > 0)
+  }
+  const stop = () => {
+    cancelAnimationFrame(raf)
+    start = 0
+    paint(0)
+    el.textContent = idle
+  }
+  const tick = () => {
+    if (!start) return
+    const p = Math.min(1, (performance.now() - start) / ms)
+    paint(p)
+    if (p >= 1) {
+      stop()
+      done()
+      return
+    }
+    raf = requestAnimationFrame(tick)
+  }
+  el.textContent = idle
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault()
+    start = performance.now()
+    el.textContent = active
+    raf = requestAnimationFrame(tick)
+  })
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+    el.addEventListener(ev, stop)
+  }
+}
+
 export class MenuView {
   private root = $('menuScr')
   private langGrid = $('langGrid')
@@ -177,7 +227,7 @@ export class MenuView {
 
     this.langGrid.innerHTML = LANG_IDS.map((id) => {
       const [native, english] = LANGUAGES[id].labels
-      return `<button class="chip ${id === data.lang ? 'on' : ''}" data-lang="${id}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
+      return `<button class="chip ${id === data.lang ? 'on' : ''}" data-lang="${id}" data-say="${english}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
     }).join('')
     for (const btn of this.langGrid.querySelectorAll<HTMLElement>('[data-lang]')) {
       btn.addEventListener('click', () => this.cb.onLang(btn.dataset.lang as LangId))
@@ -339,11 +389,80 @@ export class LevelEndView {
   }
 }
 
+// -------------------------------------------------------- parent corner --
+
+export interface WeekSummary {
+  /** Distinct characters practised in the last seven days. */
+  practiced: number
+  correct: number
+  wrong: number
+  /** Answers per day, oldest first, always seven entries. */
+  perDay: number[]
+  /** Day initials matching perDay. */
+  labels: string[]
+  /** The pairs this child actually mixes up, worst first. */
+  confusions: Array<{ a: string; b: string; n: number }>
+}
+
+/**
+ * The only screen in the app written for an adult.
+ *
+ * Parents buy this and parents decide whether it stays on the phone, and
+ * until now they got nothing at all: no way to see whether it had been used
+ * this week, or whether it was working. That is the entire content here —
+ * plus the settings and the reset button, which are behind the same hold
+ * because they are exactly what a child should not reach.
+ */
+export class ParentView {
+  private root = $('parentScr')
+
+  constructor(onClose: () => void, onReset: () => void) {
+    $('parentClose').addEventListener('click', onClose)
+    // A second gate on the destructive control itself. Belt and braces: the
+    // door gate keeps children out, this one keeps a browsing adult from
+    // deleting a fortnight of work with a stray tap.
+    holdToConfirm($('resetBtn'), 'hold to reset', 'keep holding…', onReset)
+  }
+
+  open(w: WeekSummary): void {
+    const box = $('weekBox')
+    const total = w.correct + w.wrong
+    const pct = total ? Math.round((w.correct / total) * 100) : 0
+    const peak = Math.max(1, ...w.perDay)
+    const bars = w.perDay
+      .map((n) => `<i class="${n ? '' : 'none'}" style="height:${Math.round((n / peak) * 100)}%"></i>`)
+      .join('')
+    const days = w.labels.map((l) => `<span>${l}</span>`).join('')
+    const mix = w.confusions.length
+      ? `<div class="mix">Still mixing up ${w.confusions
+          .slice(0, 3)
+          .map((c) => `<b>${c.a}</b>/<b>${c.b}</b>`)
+          .join(', ')}</div>`
+      : total
+        ? '<div class="mix muted">No characters are being confused right now.</div>'
+        : ''
+    box.innerHTML = `
+      <h3>This week</h3>
+      <p><span class="big">${w.practiced}</span> ${w.practiced === 1 ? 'character' : 'characters'} practised</p>
+      <p class="muted">${total} ${total === 1 ? 'answer' : 'answers'}${total ? ` · ${pct}% right` : ''}</p>
+      <div class="bars">${bars}</div>
+      <div class="days">${days}</div>
+      ${mix}`
+    this.root.hidden = false
+  }
+
+  close(): void {
+    this.root.hidden = true
+  }
+}
+
 // ---------------------------------------------------------------- chart --
 
 export interface ChartCallbacks {
   onSpeak(ch: string): void
   onReset(): void
+  /** Open the parent corner — reached only through a deliberate hold. */
+  onParent(): void
   onClose(): void
   onVoice(name: string): void
   onShowRomaji(show: boolean): void
@@ -361,54 +480,13 @@ export class ChartView {
 
   constructor(private cb: ChartCallbacks) {
     $('learnClose').addEventListener('click', () => cb.onClose())
-    /**
-     * A parent gate on the one destructive control in the app.
-     *
-     * "Reset progress" sat behind a native confirm() one tap away, on a screen
-     * a child reaches from the menu — and a confirm dialog is exactly the kind
-     * of thing a four-year-old dismisses by tapping the bigger button. Months
-     * of a child's work should not be one accidental double-tap from gone.
-     *
-     * A three-second deliberate hold is the standard gate: trivial for an
-     * adult who means it, and something a child does not do by accident,
-     * because letting go cancels it. The bar filling is the whole feedback —
-     * it also tells a curious child exactly what to stop doing.
-     */
-    const reset = $('resetBtn')
-    const HOLD_MS = 3000
-    let holdStart = 0
-    let raf = 0
-    const paint = (p: number) => {
-      reset.style.setProperty('--hold', `${Math.round(p * 100)}%`)
-      reset.classList.toggle('holding', p > 0)
-    }
-    const stop = () => {
-      cancelAnimationFrame(raf)
-      holdStart = 0
-      paint(0)
-      reset.textContent = 'hold to reset'
-    }
-    const tick = () => {
-      if (!holdStart) return
-      const p = Math.min(1, (performance.now() - holdStart) / HOLD_MS)
-      paint(p)
-      if (p >= 1) {
-        stop()
-        cb.onReset()
-        return
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    reset.textContent = 'hold to reset'
-    reset.addEventListener('pointerdown', (e) => {
-      e.preventDefault()
-      holdStart = performance.now()
-      reset.textContent = 'keep holding…'
-      raf = requestAnimationFrame(tick)
-    })
-    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
-      reset.addEventListener(ev, stop)
-    }
+    // The parent gate now guards the DOOR rather than one control, because
+    // everything behind it — every setting a five-year-old would flip by
+    // accident, and the one button that deletes months of their work — has
+    // the same problem. See holdToConfirm.
+    holdToConfirm($('parentBtn'), 'hold: grown-ups', 'keep holding…', () =>
+      cb.onParent(),
+    )
     this.sortBtn.addEventListener('click', () => {
       this.weakFirst = !this.weakFirst
       this.lastRender?.()
@@ -648,7 +726,7 @@ export class OnboardView {
     const grid = $('onboardGrid')
     grid.innerHTML = LANG_IDS.map((id) => {
       const [native, english] = LANGUAGES[id].labels
-      return `<button class="chip" data-lang="${id}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
+      return `<button class="chip" data-lang="${id}" data-say="${english}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
     }).join('')
     grid.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')

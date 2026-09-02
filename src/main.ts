@@ -13,7 +13,13 @@
 import { FIXED_DT, GameLoop } from './core/loop'
 import { bindInput, DIR_VECTORS, type Dir } from './core/input'
 import { SceneStack, type Scene } from './core/scene'
-import { load, save, saveNow, type SaveData } from './core/storage'
+import {
+  load,
+  recordAnswer,
+  save,
+  saveNow,
+  type SaveData,
+} from './core/storage'
 import {
   buildTable,
   LANGUAGES,
@@ -53,6 +59,8 @@ import {
   MenuView,
   OnboardView,
   PlaceView,
+  ParentView,
+  type WeekSummary,
 } from './ui/menus'
 import { haptic, initNativeChrome, isNativeApp } from './ui/native'
 import { Diag } from './ui/diag'
@@ -287,7 +295,12 @@ function continueRun(): void {
 const goalText = (r: RunConfig, w: World): string => {
   if (!r.level) return ''
   const done = r.words ? w.wordsDone : w.eaten
-  return `${done}/${r.level.goal.count} · miss ${w.mistakes}/${r.level.goal.maxMisses}`
+  const goal = `${done}/${r.level.goal.count}`
+  // The miss budget is only enforced on boss levels now. Showing "miss 4/3" on
+  // a level that cannot be failed advertises a rule that is not running, and
+  // tells a child they have already lost something they have not.
+  if (!isBoss(r.level)) return goal
+  return `${goal} · miss ${w.mistakes}/${r.level.goal.maxMisses}`
 }
 
 // ------------------------------------------------------------------ scenes --
@@ -444,6 +457,9 @@ function makePlayScene(r: RunConfig): Scene {
 
         w.events.on('eat', ({ item, award, streak, score }) => {
           diag?.mark('eat')
+          // A parent's only real question is whether this is being used and
+          // whether it is working; nothing recorded WHEN anything happened.
+          recordAnswer(data, dateKey(), item.ch, true)
           if (r.daily) tape.push('🟩')
           const c = renderer.centerOf(item)
           const wasMult = comboMultiplier(streak - 1)
@@ -485,6 +501,7 @@ function makePlayScene(r: RunConfig): Scene {
         }),
 
         w.events.on('wrong', ({ item, target, targetSound }) => {
+          recordAnswer(data, dateKey(), target || item.ch, false)
           if (r.daily) tape.push('🟥')
           const c = renderer.centerOf(item)
           hud.setStreak(0)
@@ -1108,23 +1125,22 @@ const levelEndView = new LevelEndView(
 // The end card speaks itself — see LevelEndView.speak.
 levelEndView.speak = (t) => speech.sayUI(t)
 
+const parentView = new ParentView(
+  () => {
+    if (scenes.top?.name === 'parent') scenes.pop()
+  },
+  () => resetProgress(),
+)
+
 const chartView = new ChartView({
   onSpeak: (ch) => speech.speak(ch),
+  onParent() {
+    if (!scenes.has('parent')) scenes.push(makeParentScene())
+  },
   onClose() {
     if (scenes.top?.name === 'chart') scenes.pop()
   },
-  onReset() {
-    if (!confirm(`Clear your ${LANGUAGES[data.lang].name} progress?`)) return
-    // Every set of the language, not just the visible table — the confirm
-    // names the language, so that is what gets cleared.
-    for (const set of Object.values(LANGUAGES[data.lang].sets)) {
-      for (const ch of Object.keys(set)) delete data.stats[ch]
-    }
-    save(data)
-    if (scenes.top?.name === 'chart') {
-      chartView.open(data, run && scenes.has('play') ? run.table : table)
-    }
-  },
+  onReset: () => resetProgress(),
   onVoice(name) {
     speech.choose(name)
     speech.warmup()
@@ -1225,6 +1241,83 @@ async function shareDailyResult(): Promise<void> {
 
 function runSummary(): string | undefined {
   return world ? `run: ${world.score} · ${menuResultLine()}` : undefined
+}
+
+/**
+ * The last seven days of practice, assembled for the parent corner.
+ *
+ * "Practised" counts DISTINCT characters, not answers: forty attempts at the
+ * same letter is not forty letters, and a parent reading this deserves the
+ * honest number. Confusions come from the pairs the child actually mixed up,
+ * which the game has been recording all along for its own spawn logic and has
+ * never shown to anyone.
+ */
+function weekSummary(): WeekSummary {
+  const perDay: number[] = []
+  const labels: string[] = []
+  const chars = new Set<string>()
+  let correct = 0
+  let wrong = 0
+  const now = new Date()
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const log = data.history[dateKey(d)]
+    perDay.push(log ? log.correct + log.wrong : 0)
+    labels.push('SMTWTFS'[d.getDay()] as string)
+    if (!log) continue
+    correct += log.correct
+    wrong += log.wrong
+    for (const c of log.chars) chars.add(c)
+  }
+
+  // Only pairs where BOTH characters belong to what is being learned now —
+  // a Greek confusion is not useful to a parent looking at hiragana.
+  const table = buildTable(data.lang, data.setName)
+  const pairs: Array<{ a: string; b: string; n: number }> = []
+  for (const [ch, stat] of Object.entries(data.stats)) {
+    if (!(ch in table) || !stat.confused) continue
+    for (const [other, n] of Object.entries(stat.confused)) {
+      if (!(other in table) || n < 2) continue
+      // Deduplicate: a/b and b/a are one confusion, not two.
+      if (pairs.some((p) => p.a === other && p.b === ch)) continue
+      pairs.push({ a: ch, b: other, n })
+    }
+  }
+  pairs.sort((x, y) => y.n - x.n)
+
+  return { practiced: chars.size, correct, wrong, perDay, labels, confusions: pairs }
+}
+
+/**
+ * Clear this language's progress. Reached only from the parent corner, and
+ * only after a hold — twice, since the door is gated too.
+ */
+function resetProgress(): void {
+  if (!confirm(`Clear your ${LANGUAGES[data.lang].name} progress?`)) return
+  // Every set of the language, not just the visible table — the confirm names
+  // the language, so that is what gets cleared.
+  for (const set of Object.values(LANGUAGES[data.lang].sets)) {
+    for (const ch of Object.keys(set)) delete data.stats[ch]
+  }
+  save(data)
+  if (scenes.top?.name === 'parent') parentView.open(weekSummary())
+  if (scenes.has('chart')) {
+    const table = buildTable(data.lang, data.setName)
+    chartView.open(data, run && scenes.has('play') ? run.table : table)
+  }
+}
+
+function makeParentScene(): Scene {
+  return {
+    name: 'parent',
+    drawsBelow: true,
+    enter() {
+      parentView.open(weekSummary())
+    },
+    exit() {
+      parentView.close()
+    },
+  }
 }
 
 function syncVoices(): void {
@@ -1454,7 +1547,12 @@ function wireSpeakOnTouch(): void {
       // Never during play. The steering pad is made of buttons, and having
       // the interface announce "up arrow" every time a child steers would be
       // both maddening and a way to talk over the cue they are trying to hear.
-      if (!el || el.closest('#seal, .glyph, .chart, #playScr')) return
+      // `.missChip` carries data-say with the LESSON character in it, so the
+      // English interface voice would read a kana aloud — the exact case this
+      // function excludes elsewhere. Those chips get their own handler below,
+      // in the voice of the language being learned.
+      if (!el || el.matches('.missChip')) return
+      if (el.closest('#seal, .glyph, .chart, #playScr')) return
       const said = el.dataset['say'] ?? el.textContent ?? ''
       speech.sayUI(said.split('·')[0] as string)
     },
@@ -1462,6 +1560,17 @@ function wireSpeakOnTouch(): void {
   )
 }
 wireSpeakOnTouch()
+
+/**
+ * Tapping a missed character on the end card replays it — in the language
+ * being learned, which is the whole point of a review chip. Delegated, because
+ * the chips are rebuilt with the card every time it opens.
+ */
+document.addEventListener('click', (e) => {
+  const chip = (e.target as HTMLElement | null)?.closest<HTMLElement>('.missChip')
+  const ch = chip?.dataset['say']
+  if (ch) speech.speak(ch)
+})
 
 // Read the clip manifest once at boot. It touches no AudioContext, so it is
 // safe before a user gesture; absent or empty simply means every cue uses

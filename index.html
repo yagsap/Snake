@@ -218,6 +218,21 @@
 .lvl.locked .kind{opacity:.3;filter:grayscale(1)}
 .lvl.current{border-color:rgba(154,209,178,.55);background:rgba(154,209,178,.07)}
 .lvl.current .state{color:#9AD1B2}
+
+/* The parent corner's weekly view: the only screen written for an adult. */
+.week{background:rgba(255,255,255,.04);border:1px solid var(--grid);border-radius:10px;
+  padding:12px 14px;margin:0 0 12px;text-align:left}
+.week h3{margin:0 0 6px;font:600 13px/1.3 var(--mono);color:#9AD1B2;letter-spacing:.04em;text-transform:uppercase}
+.week p{margin:0 0 4px;font-size:13px;color:#D7DCE8}
+.week .big{font-size:26px;font-weight:700;color:#F1EDE3;margin-right:6px}
+.week .muted{color:#8A93A8;font-size:12px}
+.week .bars{display:flex;gap:3px;align-items:flex-end;height:34px;margin:8px 0 4px}
+.week .bars i{flex:1;background:rgba(154,209,178,.65);border-radius:2px 2px 0 0;min-height:2px}
+.week .bars i.none{background:rgba(255,255,255,.09)}
+.week .days{display:flex;gap:3px;font-size:10px;color:#6E7794}
+.week .days span{flex:1;text-align:center}
+.week .mix{margin-top:8px;font-size:13px;color:#D7DCE8}
+.week .mix b{color:#F4A79F;font-family:var(--glyph);font-weight:600}
 </style>
 </head>
 <body>
@@ -327,19 +342,30 @@
   <div class="inner">
     <div class="top">
       <div><h2 id="learnTitle">chart</h2><div class="sub">tap to hear · game paused</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="sortBtn">weakest first</button><button class="btn" id="resetBtn">reset progress</button><button class="btn" id="learnClose">back</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="sortBtn">weakest first</button><button class="btn" id="parentBtn" data-say="For grown ups. Hold this button.">hold: grown-ups</button><button class="btn" id="learnClose">back</button></div>
     </div>
     <div class="chart" id="chart"></div>
     <div class="legend">red border = missed · green = solid</div>
-    <div class="setgrp">
-      <label>voice <select id="voiceSel" aria-label="Voice"></select></label>
-      <label><input type="checkbox" id="showSnd"> show the sound during play</label>
-      <label><input type="checkbox" id="reduceMotion"> reduce motion (no shake or particles)</label>
-      <label><input type="checkbox" id="showPad"> show arrow buttons</label>
-      <label><input type="checkbox" id="music"> background music</label>
-    </div>
   </div>
 </div>
+
+<!-- The parent corner. Everything here is destructive, fiddly, or of no
+     interest to a child, which is exactly why it sits behind a hold: settings
+     a five-year-old would flip by accident, and the one control that can
+     delete months of their work. -->
+<div class="ov" id="parentScr" hidden><div class="menu-card">
+  <h2 class="campTitle">For grown-ups</h2>
+  <div class="week" id="weekBox"></div>
+  <div class="setgrp">
+    <label>voice <select id="voiceSel" aria-label="Voice"></select></label>
+    <label><input type="checkbox" id="showSnd"> show the sound during play</label>
+    <label><input type="checkbox" id="reduceMotion"> reduce motion (no shake or particles)</label>
+    <label><input type="checkbox" id="showPad"> show arrow buttons</label>
+    <label><input type="checkbox" id="music"> background music</label>
+  </div>
+  <button class="btn" id="resetBtn">hold to reset</button>
+  <button class="ghost" id="parentClose">back</button>
+</div></div>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

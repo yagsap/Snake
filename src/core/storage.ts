@@ -59,6 +59,13 @@ export interface Focus {
   startedAt: number
 }
 
+/** One day's practice. `chars` is distinct characters met, not attempts. */
+export interface DayLog {
+  chars: string[]
+  correct: number
+  wrong: number
+}
+
 export interface SaveData {
   stats: Record<string, CharStat>
   /** The current learning goal, or null for a player who predates it. */
@@ -83,6 +90,16 @@ export interface SaveData {
   /** Show the on-screen arrow buttons. Off by default — drag-steering is the
    *  hero control; the buttons remain as an accessibility option. */
   showPad: boolean
+  /**
+   * A fortnight of daily practice, keyed by local date.
+   *
+   * The schedule knows what a character's state IS but keeps no record of
+   * WHEN anything happened, so nothing could answer a parent's only real
+   * question: has this been used this week, and is it working. Two weeks is
+   * enough for that and short enough that the save stays small; older days
+   * are pruned on every write rather than accumulating forever.
+   */
+  history: Record<string, DayLog>
   /** Ambient music. On by default — it is generated, quiet, and ducks under
    *  the spoken cue, so it adds atmosphere without ever masking the answer. */
   music: boolean
@@ -94,6 +111,7 @@ const defaults = (): SaveData => ({
   bestScore: 0,
   bestEaten: 0,
   campaign: {},
+  history: {},
   daily: null,
   lang: 'ja',
   setName: 'hiragana',
@@ -147,6 +165,54 @@ function parseFocus(raw: unknown): Focus | null {
     setName: typeof o['setName'] === 'string' ? o['setName'] : '',
     startedAt: Math.max(0, num(o['startedAt'])),
   }
+}
+
+/** Days to keep. Two weeks answers "this week" and "last week" and no more. */
+export const HISTORY_DAYS = 14
+
+function parseHistory(raw: unknown): Record<string, DayLog> {
+  const out: Record<string, DayLog> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [day, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== 'object') continue
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue
+    const o = v as Record<string, unknown>
+    const chars = Array.isArray(o['chars'])
+      ? (o['chars'] as unknown[]).filter((c): c is string => typeof c === 'string')
+      : []
+    out[day] = {
+      chars: [...new Set(chars)],
+      correct: Math.max(0, num(o['correct'])),
+      wrong: Math.max(0, num(o['wrong'])),
+    }
+  }
+  return prunedHistory(out)
+}
+
+/** Keep only the most recent HISTORY_DAYS, by date key order. */
+export function prunedHistory(
+  h: Record<string, DayLog>,
+): Record<string, DayLog> {
+  const days = Object.keys(h).sort()
+  if (days.length <= HISTORY_DAYS) return h
+  const keep = new Set(days.slice(-HISTORY_DAYS))
+  const out: Record<string, DayLog> = {}
+  for (const d of days) if (keep.has(d)) out[d] = h[d] as DayLog
+  return out
+}
+
+/** Record one answer against today. Mutates `data` and returns it. */
+export function recordAnswer(
+  data: SaveData,
+  day: string,
+  ch: string,
+  correct: boolean,
+): void {
+  const log = (data.history[day] ??= { chars: [], correct: 0, wrong: 0 })
+  if (!log.chars.includes(ch)) log.chars.push(ch)
+  if (correct) log.correct += 1
+  else log.wrong += 1
+  data.history = prunedHistory(data.history)
 }
 
 function parseCampaign(raw: unknown): Record<string, LevelState> {
@@ -216,6 +282,7 @@ export function load(): SaveData {
     // silently resetting a returning player's record to zero.
     bestEaten: Math.max(0, num(d['bestEaten'], num(d['best']))),
     campaign: parseCampaign(d['campaign']),
+    history: parseHistory(d['history']),
     daily: parseDaily(d['daily']),
     lang: isLangId(d['lang']) ? d['lang'] : base.lang,
     setName: typeof d['setName'] === 'string' ? d['setName'] : base.setName,
