@@ -1,4 +1,4 @@
-# Script Snake
+# Alphabite
 
 Snake, but the food is a writing system: a character is spoken aloud, and you
 steer onto the glyph that matches it. Wrong bites cost body segments and teach

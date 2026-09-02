@@ -6,16 +6,24 @@ counts in brackets are what these actually use.
 ## Name (30 max)
 
 ```
-Script Snake
+Alphabite
 ```
-[12] — if taken, the fallback that still fits: `Script Snake: Learn Letters` [27]
+[9] — a pun on what the game literally is: you bite letters. Short enough that
+the subtitle carries all the explaining, which is the right division of labour
+when both fields are searchable and the name is weighted heaviest.
+
+If taken, in order of preference:
+- `Alphabite: Learn Any Script` [27]
+- `Alphabite — Letter Snake` [24]
+- `Alphabet Snake` [14] — plainer, heavily searched, reads a little young
 
 ## Subtitle (30 max)
 
 ```
 Eat the letter you hear
 ```
-[22]
+[23] — the whole mechanic in five words. Alternative, if discovery matters more
+than charm: `Learn kana, Greek & Cyrillic` [28]
 
 ## Promotional text (170 max, editable without review)
 

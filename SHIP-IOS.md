@@ -1,4 +1,4 @@
-# Shipping Script Snake to the iOS App Store
+# Shipping Alphabite to the iOS App Store
 
 The iOS app is a Capacitor 8 shell around the same web build that deploys to
 GitHub Pages. One codebase; `dist/` is copied into the app bundle, so the game
@@ -122,7 +122,7 @@ At https://appstoreconnect.apple.com → My Apps → **+** → New App:
 | Field | Value |
 |---|---|
 | Platform | iOS |
-| Name | Script Snake (if taken, e.g. "Script Snake — learn kana & more") |
+| Name | Alphabite (if taken, e.g. "Alphabite — learn kana & more") |
 | Primary language | English |
 | Bundle ID | the one from Step 2 |
 | SKU | `scriptsnake-001` (internal, never shown) |
