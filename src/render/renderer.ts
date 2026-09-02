@@ -11,6 +11,9 @@ import { Sprites } from './sprites'
 import { clearMetricsCache, glyph } from './glyph'
 
 const W = BOARD.size
+
+/** How long the wanted character is spotlit after a miss. */
+const CALLOUT_LIFE = 1.5
 const TWO_PI = Math.PI * 2
 
 function roundRect(
@@ -105,6 +108,8 @@ export class Renderer {
   private shocks: Array<{ x: number; y: number; born: number; strength: number }> = []
   /** Clock time until which every tile is celebrating. */
   private cheerUntil = 0
+  /** The character being pointed at after a miss — see `callOut`. */
+  private callout: { x: number; y: number; until: number } | null = null
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false })
@@ -196,6 +201,21 @@ export class Renderer {
     this.shocks.push({ x, y, born: this.clock, strength })
   }
 
+  /**
+   * Point at the character the player SHOULD have eaten.
+   *
+   * This is the one moment where singling a tile out is not only allowed but
+   * the entire point: the answer has already been given away by the miss, so
+   * the only thing left to do is teach. Everything else on the board dims and
+   * the wanted character rears up and waves, so the player's eye is dragged to
+   * the SHAPE they got wrong. Reading "wanted さ" in a caption teaches far
+   * less than watching さ jump up and down where it has been sitting all along.
+   */
+  callOut(cellX: number, cellY: number): void {
+    if (this.fx.intensity <= 0) return
+    this.callout = { x: cellX, y: cellY, until: this.clock + CALLOUT_LIFE }
+  }
+
   /** Mastery: every character on the board hops for you. */
   cheerItems(): void {
     if (this.fx.intensity <= 0) return
@@ -211,6 +231,7 @@ export class Renderer {
     this.camera.update(realDt)
     this.sprites.update(realDt)
     // A wave is done once it has crossed the board and its pulse has passed.
+    if (this.callout && this.clock >= this.callout.until) this.callout = null
     for (let i = this.shocks.length - 1; i >= 0; i--) {
       if (this.clock - (this.shocks[i] as { born: number }).born > 1.4) {
         this.shocks.splice(i, 1)
@@ -318,10 +339,10 @@ export class Renderer {
        * slightly differently would answer the question before the player read
        * it — the same reason the bonus ring had to move off the target.
        */
-      const bob = Math.sin(t * 1.7 + it.phase) * 3.4
-      const sway = Math.cos(t * 1.13 + it.phase * 1.7) * 2.4
-      let tilt = Math.sin(t * 0.87 + it.phase * 2.3) * 0.075
-      let breath = 1 + Math.sin(t * 2.3 + it.phase * 0.7) * 0.04
+      const bob = Math.sin(t * 1.7 + it.phase) * 7
+      const sway = Math.cos(t * 1.13 + it.phase * 1.7) * 4.2
+      let tilt = Math.sin(t * 0.87 + it.phase * 2.3) * 0.13
+      let breath = 1 + Math.sin(t * 2.3 + it.phase * 0.7) * 0.065
 
       const cx0 = it.x * CELL + CELL / 2
       const cy0 = it.y * CELL + CELL / 2
@@ -372,6 +393,28 @@ export class Renderer {
         }
       }
 
+      /**
+       * CALLOUT. After a miss the wanted character leaps and waves while the
+       * rest of the board falls back, so the correction is something you SEE
+       * rather than something you read.
+       */
+      let dim = 1
+      let callScale = 1
+      const co = this.callout
+      if (co && t < co.until) {
+        const left = (co.until - t) / CALLOUT_LIFE // 1 → 0
+        if (co.x === it.x && co.y === it.y) {
+          const p = 1 - left
+          callScale = 1 + 0.5 * Math.sin(clamp01(p * 2.4) * Math.PI * 0.5)
+          pushY -= Math.abs(Math.sin(p * 17)) * CELL * 0.3 * (0.35 + left)
+          tilt += Math.sin(p * 21) * 0.26 * left
+        } else {
+          // The others step back rather than vanish: they are still the
+          // options that were on offer, just no longer the subject.
+          dim = 0.2 + 0.12 * (1 - left)
+        }
+      }
+
       /** CHEER. On a mastery every character on the board hops for you. */
       if (t < this.cheerUntil) {
         const left = this.cheerUntil - t
@@ -389,7 +432,7 @@ export class Renderer {
        * new question.
        */
       const grow = clamp01(it.age / 0.42)
-      const scale = easeOutBack(grow) * breath
+      const scale = easeOutBack(grow) * breath * callScale
       const settling = 1 - easeOutCubic(grow)
       const drop = settling * -CELL * 0.55
       const spin = settling * 0.6
@@ -411,8 +454,20 @@ export class Renderer {
       const size = (world.reverse ? CELL * 0.46 : CELL * 0.88) * scale
 
       ctx.save()
+      ctx.globalAlpha = dim
       ctx.translate(x + sway + pushX, y + bob + drop + pushY)
       ctx.rotate(tilt + spin + push * 0.012)
+      if (callScale > 1.02) {
+        // A jade bloom behind the wanted character, so it reads even against
+        // a busy wave field.
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, CELL * 1.15)
+        g.addColorStop(0, 'rgba(154,209,178,.34)')
+        g.addColorStop(1, 'rgba(154,209,178,0)')
+        ctx.fillStyle = g
+        ctx.beginPath()
+        ctx.arc(0, 0, CELL * 1.15, 0, Math.PI * 2)
+        ctx.fill()
+      }
       // The shadow drifts FURTHER than the glyph as it rises: parallax is
       // what turns a bob into height above the water rather than a wobble.
       const lift = 1 + (bob + drop) * -0.06
@@ -422,6 +477,7 @@ export class Renderer {
       glyph(ctx, text, 0, 0, size, CELL, CELL)
       ctx.restore()
     }
+    ctx.globalAlpha = 1
   }
 
   /**

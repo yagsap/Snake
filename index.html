@@ -187,6 +187,23 @@
   .learnLine[hidden]{display:none}
   .onboardQ{margin:4px 0 2px;text-align:center;font:500 15px var(--mono);color:var(--washi)}
   #onboardGrid .chip{padding:14px 4px}
+
+/* The ladder: one tick per level, filled as far as you have climbed. */
+.ladder{display:flex;align-items:center;gap:9px;width:100%;max-width:340px;margin:2px auto 10px}
+.ladder-ticks{display:flex;gap:2px;flex:1;height:8px;align-items:stretch}
+.ladder-ticks i{flex:1;min-width:1px;border-radius:2px;background:rgba(255,255,255,.10)}
+.ladder-ticks i.c{background:#9AD1B2}
+.ladder-ticks i.p{background:#F2C14E}
+.ladder-ticks i.n{background:rgba(154,209,178,.45);box-shadow:0 0 0 1px rgba(154,209,178,.7)}
+.ladder span{font-size:11px;color:#8A93A8;letter-spacing:.02em;white-space:nowrap}
+#focusNext em{font-style:normal;color:#9AD1B2;font-weight:650}
+.lvlGlyphs{font-size:15px;color:#D7DCE8;letter-spacing:.09em;line-height:1.35;
+  display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#focusNext .lvlGlyphs{display:inline;font-size:13px;color:#9AA3B8}
+/* Characters carried forward from earlier levels, set back from the new ones. */
+.lvlGlyphs em{font-style:normal;color:#6E7794;font-size:.86em;margin-left:.45em}
+.lvl.current{border-color:rgba(154,209,178,.55);background:rgba(154,209,178,.07)}
+.lvl.current .state{color:#9AD1B2}
 </style>
 </head>
 <body>
@@ -216,11 +233,16 @@
     <div class="focus-meta">
       <b id="focusName">hiragana</b>
       <i id="focusStat">0 of 0 mastered</i>
-      <i id="focusDue" class="due"></i>
+      <i id="focusNext" class="due"></i>
     </div>
+  </div>
+  <div class="ladder">
+    <div class="ladder-ticks" id="focusLadder"></div>
+    <span id="focusLadderText"></span>
   </div>
   <button class="primary" id="continueBtn">Continue</button>
   <div class="result" id="resultLine"></div>
+  <button class="ghost" id="campBtn">All levels</button>
 
   <button class="ghost sm" id="moreBtn">more ways to play ▾</button>
   <div id="moreBox" hidden>
@@ -228,7 +250,6 @@
     <div class="pills" id="setRow"></div>
     <div class="pills" id="modeRow"></div>
     <div class="modeBlurb" id="modeBlurb"></div>
-    <button class="ghost" id="campBtn">Levels</button>
     <div style="display:flex;gap:8px">
       <button class="ghost" id="playBtn" style="flex:1">Endless</button>
       <button class="ghost" id="dailyBtn" style="flex:1">Daily run</button>

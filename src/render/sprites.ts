@@ -10,10 +10,13 @@ import { BOARD, CELL, THEME } from '../game/config'
  * game's own ink-and-washi world instead, which is also a tighter fit — the
  * board is a page, so its creatures are drops of ink.
  *
- * They exist purely to be alive: they peek in from the edges while you read a
- * cue, bounce when you master a character, and scatter in a panic when you
- * die. Nothing here touches the simulation, and reduced motion silences the
- * whole system.
+ * They appear at exactly two moments and never otherwise: they mob the board
+ * when you master a character, and they scatter in a panic when you die. An
+ * earlier version had them ambling in during every cue, and ambient decoration
+ * on a screen you are trying to READ is worse than nothing — it competed with
+ * the characters for attention and said nothing when it arrived. Restricting
+ * them to the two emotional peaks turns them from wallpaper into punctuation.
+ * Nothing here touches the simulation, and reduced motion silences it all.
  */
 
 const W = BOARD.size
@@ -56,7 +59,7 @@ export class Sprites {
       x, y,
       vx: (Math.random() - 0.5) * 22,
       vy: (Math.random() - 0.5) * 22,
-      r: CELL * (0.21 + Math.random() * 0.07),
+      r: CELL * (0.34 + Math.random() * 0.1),
       phase: Math.random() * TWO_PI,
       life: 6 + Math.random() * 6,
       mood: 'idle',
@@ -78,7 +81,7 @@ export class Sprites {
         y: y + (Math.random() - 0.5) * CELL * 3,
         vx: (Math.random() - 0.5) * 60,
         vy: -30 - Math.random() * 60,
-        r: CELL * (0.19 + Math.random() * 0.06),
+        r: CELL * (0.32 + Math.random() * 0.1),
         phase: Math.random() * TWO_PI,
         life: 2.2,
         mood: 'cheer',
@@ -89,15 +92,25 @@ export class Sprites {
   /** Death: everyone bolts for the edges, eyes wide. */
   panic(x: number, y: number): void {
     if (this.intensity <= 0) return
-    while (this.list.length < 6) this.peek()
+    // They burst OUT of the wreck rather than wandering in from the edges: a
+    // scatter only reads as a scatter if you can see where it started, and
+    // the thing that just happened happened right here.
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * TWO_PI + Math.random() * 0.5
+      this.list.push({
+        x: x + Math.cos(a) * CELL * 0.5,
+        y: y + Math.sin(a) * CELL * 0.5,
+        vx: Math.cos(a) * (300 + Math.random() * 220),
+        vy: Math.sin(a) * (300 + Math.random() * 220) - 90,
+        r: CELL * (0.3 + Math.random() * 0.14),
+        phase: Math.random() * TWO_PI,
+        life: 1.6 + Math.random() * 0.9,
+        mood: 'panic',
+      })
+    }
     for (const s of this.list) {
       s.mood = 'panic'
-      s.life = 2.4
-      const dx = s.x - x
-      const dy = s.y - y
-      const d = Math.max(1, Math.hypot(dx, dy))
-      s.vx = (dx / d) * 260
-      s.vy = (dy / d) * 260
+      s.life = Math.min(s.life, 2.5)
     }
   }
 

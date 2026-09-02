@@ -418,6 +418,31 @@ export const CAMPAIGNS: Record<LangId, LevelSpec[]> = Object.fromEntries(
   ]),
 ) as Record<LangId, LevelSpec[]>
 
+/**
+ * The characters a level introduces, separated from the ones it merely revises.
+ *
+ * Every learn level mixes its new row into everything already met, which is
+ * what makes the ladder work — but printed as one run of glyphs, level two of
+ * English reads "FGHIJABCDE", and a learner cannot tell the new work from the
+ * revision. Splitting them is the difference between a wall of letters and a
+ * legible promise: five new, five you already have.
+ */
+export function levelChars(lang: LangId, index: number): {
+  fresh: string[]
+  revised: string[]
+} {
+  const levels = CAMPAIGNS[lang]
+  const seen = new Set<string>()
+  for (let i = 0; i < index; i++) {
+    for (const c of levels[i]?.chars ?? '') seen.add(c)
+  }
+  const chars = [...(levels[index]?.chars ?? '')]
+  return {
+    fresh: chars.filter((c) => !seen.has(c)),
+    revised: chars.filter((c) => seen.has(c)),
+  }
+}
+
 /** Build a table for an arbitrary character subset, searching all the language's sets. */
 export function tableFromChars(lang: LangId, chars: string): CharTable {
   const merged: CharTable = Object.assign(

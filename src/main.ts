@@ -21,6 +21,7 @@ import {
   dailySeed,
   dateKey,
   layoutCells,
+  levelChars,
   tableFromChars,
   type LevelSpec,
   type WordEntry,
@@ -181,18 +182,37 @@ function runReceipt(w: World): string {
 }
 
 /** Characters in the current focus, and how they stand. */
-function focusStats(): { total: number; mastered: number; due: number } {
+function focusStats(): {
+  total: number
+  mastered: number
+  due: number
+  fresh: number
+} {
   const t = buildTable(data.lang, data.setName)
   const chars = Object.keys(t)
   const now = Date.now()
   let mastered = 0
   let due = 0
+  let fresh = 0
   for (const c of chars) {
     const s = data.stats[c]
     if (s && isMastered(s)) mastered++
-    if (isDue(s, now)) due++
+    // "Due" means a character ALREADY MET that has fallen due — never-seen
+    // ones are counted separately. Conflating the two made every character
+    // due on day one, which read as a 71-item review backlog before the
+    // player had seen a single one.
+    if (!s || s.box === undefined) fresh++
+    else if (isDue(s, now)) due++
   }
-  return { total: chars.length, mastered, due }
+  return { total: chars.length, mastered, due, fresh }
+}
+
+/** How many overdue reviews justify interrupting the ladder for a drill. */
+const REVIEW_THRESHOLD = 6
+
+/** The next level the player has not cleared, or -1 when the ladder is done. */
+function nextLevelIndex(): number {
+  return CAMPAIGNS[data.lang].findIndex((l) => !data.campaign[l.id]?.cleared)
 }
 
 /**
@@ -203,13 +223,21 @@ function focusStats(): { total: number; mastered: number; due: number } {
  * how sessions get postponed.
  */
 function continueRun(): void {
+  const levels = CAMPAIGNS[data.lang]
+  const next = nextLevelIndex()
   const { due } = focusStats()
-  if (due > 0) {
+  /**
+   * THE LADDER IS THE DEFAULT. A learner climbs it a row at a time — first
+   * the vowels, then the k row, then a boss made of the lookalikes among
+   * them — and that structure is the product. Review only interrupts it once
+   * a real backlog of already-learned characters has fallen due; the earlier
+   * version treated never-seen characters as "due" and therefore sent every
+   * new player to endless mode, leaving the ladder unreachable.
+   */
+  if (due >= REVIEW_THRESHOLD) {
     startRun(endlessRun())
     return
   }
-  const levels = CAMPAIGNS[data.lang]
-  const next = levels.findIndex((l) => !data.campaign[l.id]?.cleared)
   if (next >= 0) startRun(levelRun(levels[next] as LevelSpec, next))
   else startRun(endlessRun())
 }
@@ -266,7 +294,6 @@ function makePlayScene(r: RunConfig): Scene {
 
       const showCue = (target: string, sound: string) => {
         diag?.mark('cue')
-        renderer.sprites.peek()
         tones.duck()
         if (r.reverse) {
           // The glyph IS the question; speaking it would answer a tile.
@@ -406,11 +433,30 @@ function makePlayScene(r: RunConfig): Scene {
             THEME.shu, JUICE.correctionLife,
           )
           if (target && !r.words) {
-            renderer.fx.text(
-              c.x, c.y + 24,
-              `wanted ${target} ${targetSound}`,
-              THEME.washi, JUICE.correctionLife, 13,
-            )
+            /**
+             * Point at the character that was wanted, where it actually sits.
+             * The old correction printed "wanted さ" beside the tile the
+             * player bit by mistake — which puts the answer in the one place
+             * on the board their eye should NOT be learning to associate it
+             * with. Now the real さ rears up and waves across the board, with
+             * its sound alongside it, so the correction attaches to the shape.
+             */
+            const want = w.items.find((i) => i.ch === target)
+            if (want) {
+              const wc = renderer.centerOf(want)
+              renderer.callOut(want.x, want.y)
+              renderer.fx.text(
+                wc.x, wc.y + CELL * 0.85,
+                `${target} ${targetSound}`,
+                THEME.washi, JUICE.correctionLife, 15,
+              )
+            } else {
+              renderer.fx.text(
+                c.x, c.y + 24,
+                `wanted ${target} ${targetSound}`,
+                THEME.washi, JUICE.correctionLife, 13,
+              )
+            }
           }
           if (r.level && w.mistakes > r.level.goal.maxMisses) {
             finishLevel(r, w, false)
@@ -847,7 +893,23 @@ function makeMenuScene(message?: string): Scene {
     enter() {
       menuView.show(data, message ?? menuResultLine())
       const f = focusStats()
-      menuView.renderFocus(data, f.mastered, f.total, f.due)
+      const ni = nextLevelIndex()
+      const nl = ni >= 0 ? CAMPAIGNS[data.lang][ni] : undefined
+      menuView.renderFocus(data, {
+        total: f.total,
+        mastered: f.mastered,
+        due: f.due,
+        reviewThreshold: REVIEW_THRESHOLD,
+        next: nl
+          ? {
+              index: ni,
+              title: nl.title,
+              // Only the NEW characters here: the focus card is a promise
+              // about what you are about to learn, not an inventory.
+              chars: levelChars(data.lang, ni).fresh.slice(0, 8).join(''),
+            }
+          : null,
+      })
     },
     exit() {
       menuView.hide()
@@ -1290,6 +1352,6 @@ loop.start()
 // world. Stripped from production builds — import.meta.env.DEV is compile-time.
 if (import.meta.env.DEV) {
   Object.defineProperty(window, '__snake', {
-    get: () => ({ world, scenes, data, run }),
+    get: () => ({ world, scenes, data, run, renderer, loop }),
   })
 }

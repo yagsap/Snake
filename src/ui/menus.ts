@@ -1,5 +1,5 @@
 import type { SaveData } from '../core/storage'
-import { CAMPAIGNS, KIND_LABEL, dateKey, type LevelSpec } from '../game/levels'
+import { CAMPAIGNS, KIND_LABEL, dateKey, type LevelSpec, levelChars } from '../game/levels'
 import {
   LANGUAGES,
   LANG_IDS,
@@ -20,6 +20,15 @@ const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id)
   if (!el) throw new Error(`missing #${id}`)
   return el as T
+}
+
+/** What the bullseye needs to know: where you are, and the next rung. */
+export interface FocusInfo {
+  total: number
+  mastered: number
+  due: number
+  reviewThreshold: number
+  next: { index: number; title: string; chars: string } | null
 }
 
 export interface MenuCallbacks {
@@ -77,13 +86,50 @@ export class MenuView {
    * button, not a menu of everything the app could do — choice at the door
    * is the most reliable way to lose a session before it starts.
    */
-  renderFocus(data: SaveData, mastered: number, total: number, due: number): void {
+  renderFocus(data: SaveData, f: FocusInfo): void {
+    const { mastered, total, due, next } = f
     const pct = total ? Math.round((mastered / total) * 100) : 0
     $('focusName').textContent = `${LANGUAGES[data.lang].name} · ${data.setName}`
     $('focusStat').textContent = `${mastered} of ${total} mastered`
-    const dueEl = $('focusDue')
-    dueEl.textContent = due ? `${due} due for review` : 'all caught up — learn something new'
     $('focusPct').textContent = `${pct}%`
+
+    /**
+     * The next rung, named. A learner needs to see the ladder they are on and
+     * the single step in front of them; "12 of 71 mastered" describes a state
+     * but proposes nothing to do about it. The line below always answers "so
+     * what am I about to play?", and the button repeats that answer so the two
+     * can never disagree.
+     */
+    const levels = CAMPAIGNS[data.lang]
+    const cleared = levels.filter((l) => data.campaign[l.id]?.cleared).length
+    const nextEl = $('focusNext')
+    const btn = $('continueBtn')
+    if (due >= f.reviewThreshold) {
+      nextEl.textContent = `${due} due for review`
+      btn.textContent = `Review ${due} characters`
+    } else if (next) {
+      nextEl.innerHTML =
+        `<em>Level ${next.index + 1} of ${levels.length}</em> · ${next.title}` +
+        (next.chars ? ` <span class="lvlGlyphs">${next.chars}</span>` : '')
+      btn.textContent = `Level ${next.index + 1} · ${next.title}`
+    } else {
+      nextEl.textContent = 'every level cleared — keep them sharp'
+      btn.textContent = 'Endless run'
+    }
+
+    // The rungs themselves: one tick per level, filled as far as you have
+    // climbed. This is the ladder made literal, and it is the one element on
+    // the screen that visibly grows every single session.
+    const strip = $('focusLadder')
+    const span = levels.length
+    strip.innerHTML = levels
+      .map((l, i) => {
+        const st = data.campaign[l.id]
+        const cls = st?.perfect ? 'p' : st?.cleared ? 'c' : i === next?.index ? 'n' : ''
+        return `<i class="${cls}"></i>`
+      })
+      .join('')
+    $('focusLadderText').textContent = `${cleared}/${span} levels`
 
     const c = $<HTMLCanvasElement>('focusRing')
     const ctx = c.getContext('2d')
@@ -142,8 +188,7 @@ export class MenuView {
 
     const levels = CAMPAIGNS[data.lang]
     const cleared = levels.filter((l) => data.campaign[l.id]?.cleared).length
-    $('campBtn').textContent =
-      cleared > 0 ? `Levels · ${cleared}/${levels.length}` : 'Levels'
+    $('campBtn').textContent = `All levels · ${cleared}/${levels.length}`
 
     // Today's daily already played: the button wears the score. An unplayed
     // daily stays a plain invitation.
@@ -174,22 +219,49 @@ export class CampaignView {
 
   open(data: SaveData): void {
     this.levels = CAMPAIGNS[data.lang]
-    $('campTitle').textContent = `${LANGUAGES[data.lang].name} levels`
+    const cleared = this.levels.filter((l) => data.campaign[l.id]?.cleared).length
+    $('campTitle').textContent =
+      `${LANGUAGES[data.lang].name} · ${cleared}/${this.levels.length} levels`
+    let current = -1
     this.listEl.innerHTML = this.levels
       .map((lvl, i) => {
         const st = data.campaign[lvl.id]
         const prev = i === 0 ? null : this.levels[i - 1]
         const unlocked = i === 0 || (prev && data.campaign[prev.id]?.cleared)
-        const cls = !unlocked ? 'locked' : st?.perfect ? 'perfect' : st?.cleared ? 'cleared' : ''
-        const state = !unlocked ? '🔒' : st?.perfect ? '★' : st?.cleared ? '✓' : ''
+        const isNext = unlocked && !st?.cleared && current < 0
+        if (isNext) current = i
+        const cls = !unlocked
+          ? 'locked'
+          : `${st?.perfect ? 'perfect' : st?.cleared ? 'cleared' : ''}${isNext ? ' current' : ''}`
+        const state = !unlocked ? '🔒' : st?.perfect ? '★' : st?.cleared ? '✓' : '▸'
+        // The characters themselves, on every row. A list of titles like "the
+        // s row" is only meaningful to someone who already knows the script —
+        // which is nobody who needs this app. Showing さしすせそ makes the
+        // ladder legible at a glance: you can see what you have taken and
+        // exactly which shapes are waiting on the next rung.
+        const { fresh, revised } = levelChars(data.lang, i)
+        const cap = (a: string[], n: number) =>
+          a.slice(0, n).join('') + (a.length > n ? '…' : '')
+        const glyphs = lvl.words
+          ? lvl.words.map((e) => e.w).slice(0, 4).join(' ')
+          : cap(fresh, 10) +
+            (revised.length ? `<em>+${cap(revised, 8)}</em>` : '')
         return `<button class="lvl ${cls}" data-i="${i}">
           <span class="num">${i + 1}</span>
-          <span class="meta"><b>${lvl.title}</b><i>${KIND_LABEL[lvl.kind]}</i></span>
+          <span class="meta">
+            <b>${lvl.title}</b>
+            <span class="lvlGlyphs">${glyphs}</span>
+            <i>${KIND_LABEL[lvl.kind]}</i>
+          </span>
           <span class="state">${state}</span>
         </button>`
       })
       .join('')
     this.root.hidden = false
+    // Open on the rung you are standing on, not on level one. By level thirty
+    // the interesting row is far off the bottom of a list this long.
+    const cur = this.listEl.querySelector<HTMLElement>('.lvl.current')
+    if (cur) cur.scrollIntoView({ block: 'center' })
   }
 
   close(): void {
