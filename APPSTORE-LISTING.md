@@ -120,29 +120,30 @@ a remote URL.
 
 ## Screenshots — DONE
 
-Five finished 1320x2868 PNGs (the 6.9-inch set, the only one App Store
-Connect requires — smaller sizes are scaled from it) are in
-`store-screenshots/`, captions already baked in. Upload in this order:
+Six finished 1320x2868 PNGs (the 6.9-inch set, the only one App Store Connect
+requires — smaller sizes are scaled from it) in `store-screenshots/`, captions
+baked in. Upload in this order:
 
 | File | Caption |
 |---|---|
 | `1-gameplay.png` | Hear a letter. / Eat the letter. |
-| `3-phonics.png` | b is for ball. / Sounds, not just names. |
-| `2-menu-ladder.png` | Always one / clear next step. |
-| `4-levels.png` | Letters, numbers, / and first words. |
-| `5-chart.png` | It knows what / they keep missing. |
+| `2-phonics.png` | b is for ball. / Sounds, not just names. |
+| `3-counting.png` | How many do you see? / Counting, not just numerals. |
+| `4-levels.png` | Always one / clear next step. |
+| `5-parent.png` | For grown-ups. / See what they practised. |
+| `6-chart.png` | It knows what / they keep missing. |
 
-Gameplay leads because it shows the rule in one glance. Phonics is second
-because it is the strongest claim for the audience this listing is written
-for — most alphabet apps drill letter NAMES, and names do not help a child
-decode a word.
+Gameplay leads because it shows the rule at a glance. Phonics is second
+because it is the strongest claim for this audience: most alphabet apps drill
+letter NAMES, and a name does not help a child decode a word. The parent
+corner is in the set deliberately — parents are the buyers, and "I can see
+what they practised" is the reason a grown-up keeps the app installed.
 
 Captured at 440x956 CSS pixels at 3x, which IS an iPhone 16 Pro Max, so the
-layout is the one a real phone renders rather than a desktop page scaled up.
-Verified against the same screens in the iOS Simulator.
+layout is the one a real phone renders. Verified against the Simulator.
 
 Note for a future pass: the app leaves a wide empty band above and below the
-menu card on a 6.9-inch phone — real, not a capture artefact, and confirmed
-in the Simulator. The screenshots hang the screen below a caption so the band
-reads as intentional padding, but the layout itself would be worth tightening
-for the largest phones.
+menu card on a 6.9-inch phone — real, not a capture artefact, confirmed in the
+Simulator. The compositions hang the screen below a caption so the band reads
+as intentional padding, but the layout is worth tightening for the largest
+phones.

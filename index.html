@@ -219,6 +219,12 @@
 .lvl.current{border-color:rgba(154,209,178,.55);background:rgba(154,209,178,.07)}
 .lvl.current .state{color:#9AD1B2}
 
+/* The parent corner is opened FROM the chart, which is a z-index:20 layer of
+   its own, so it must sit above it — as a plain .ov (z-index:10) it opened
+   perfectly and rendered underneath, and a parent holding the button saw
+   nothing happen at all. */
+#parentScr{z-index:30}
+
 /* The parent corner's weekly view: the only screen written for an adult. */
 .week{background:rgba(255,255,255,.04);border:1px solid var(--grid);border-radius:10px;
   padding:12px 14px;margin:0 0 12px;text-align:left}
