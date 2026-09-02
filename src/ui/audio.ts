@@ -308,6 +308,17 @@ export class Tones {
     this.play(784, 0.22, 'sine', 0.08, 0.16)
   }
 
+  /** One soft tick per countdown number. */
+  count(): void {
+    this.play(523, 0.07, 'sine', 0.05)
+  }
+
+  /** The countdown resolving into play. */
+  go(): void {
+    this.play(784, 0.09)
+    this.play(1046, 0.16, 'sine', 0.07, 0.07)
+  }
+
   mastered(): void {
     // Brighter and higher than the multiplier: mastering a character is the
     // game's biggest moment and deserves its own sound.

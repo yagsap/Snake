@@ -106,6 +106,13 @@ export const JUICE = {
   eatPopDuration: 0.34,
   eatPopScale: 0.42,
 
+  /**
+   * Fresh-run countdown. Not dead air: the board is laid out and the first
+   * cue speaks during the count, so these seconds are READING time — the
+   * player knows what they are hunting before anything moves. Tap skips.
+   */
+  readySeconds: 3,
+
   /** Full-screen colour flash. */
   flashDuration: 0.28,
 

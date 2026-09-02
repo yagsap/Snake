@@ -395,7 +395,7 @@ export class Renderer {
     const factor = speedBonusFactor(world.targetAge)
     if (factor <= 0) return
     const ctx = this.ctx
-    const r = CELL * 0.72
+    const r = CELL * 0.76
     // Gold while the full bonus holds, cooling to red as it fades.
     ctx.strokeStyle =
       world.targetAge <= SCORING.bonusWindow
@@ -543,6 +543,36 @@ export class Renderer {
     }
 
     /**
+     * The same geometry as strokeSeg, but only ADDED to the current path —
+     * the caller strokes every segment in one operation. Used by the
+     * elevation shadow, where per-segment strokes would overlap and
+     * double-darken at each junction.
+     */
+    const addSeg = (k: number): void => {
+      const o = k * 6
+      const x1 = segs[o] as number
+      const y1 = segs[o + 1] as number
+      const cx = segs[o + 2] as number
+      const cy = segs[o + 3] as number
+      const x2 = segs[o + 4] as number
+      const y2 = segs[o + 5] as number
+      const one = (dx: number, dy: number): void => {
+        ctx.moveTo(x1 + dx, y1 + dy)
+        ctx.quadraticCurveTo(cx + dx, cy + dy, x2 + dx, y2 + dy)
+      }
+      one(0, 0)
+      if (mode.wrap) {
+        const sx =
+          Math.min(x1, cx, x2) < 0 ? W : Math.max(x1, cx, x2) > W ? -W : 0
+        const sy =
+          Math.min(y1, cy, y2) < 0 ? W : Math.max(y1, cy, y2) > W ? -W : 0
+        if (sx) one(sx, 0)
+        if (sy) one(0, sy)
+        if (sx && sy) one(sx, sy)
+      }
+    }
+
+    /**
      * Copies of a point just off the opposite edges, so wrapping looks
      * seamless — written as flat x,y pairs into a buffer that outlives the
      * frame, and returning how many numbers were written. The previous
@@ -574,11 +604,39 @@ export class Renderer {
     }
     const bodyTint = this.recoil > 0 ? easeOutCubic(this.recoil) * 0.55 : 0
     const denom = Math.max(1, len - 1)
+
+    /**
+     * ELEVATION. The wake claims the board is water; this shadow makes the
+     * snake ride ABOVE it: one flat dark pass, offset down-right, drawn
+     * before everything else it belongs under. A translate is far cheaper
+     * than any canvas shadow, and the offset matches the drop copies under
+     * every glyph, so the whole scene agrees where the light is.
+     *
+     * ONE path, ONE stroke, ONE width. Stroking segment-by-segment layered
+     * translucent round caps on every junction — 1-(1-.26)^2 = 45% black
+     * instead of 26%, a visible chain of dark scallops down the rim that the
+     * opaque body pass hides but the shadow cannot. A single stroke of the
+     * whole spline composites each pixel exactly once. The width is constant
+     * for the same reason a real shadow's is: it tracks height above the
+     * surface, not the thickness of what casts it. The round cap at the head
+     * end covers the head, so the head needs no shadow of its own — drawn
+     * inside drawHead it would land ON TOP of the body, the carried glyphs
+     * and the urgency ring, since that runs after all three.
+     */
+    ctx.save()
+    ctx.translate(3, 5)
+    ctx.strokeStyle = 'rgba(0,0,0,.26)'
+    ctx.lineWidth = CELL * 0.86
+    ctx.beginPath()
+    for (let k = 0; k < len; k++) addSeg(k)
+    ctx.stroke()
+    ctx.restore()
+
     for (let k = 0; k < len; k++) {
       const j = len - 1 - k
       const base = this.bodyColors[j] as string
       ctx.strokeStyle = bodyTint > 0 ? mixHex(base, THEME.shu, bodyTint) : base
-      ctx.lineWidth = lerp(CELL * 0.74, CELL * 0.42, j / denom)
+      ctx.lineWidth = lerp(CELL * 0.8, CELL * 0.46, j / denom)
       strokeSeg(k)
     }
 
@@ -664,7 +722,7 @@ export class Renderer {
     const pop = easeOutCubic(this.eatPop)
     const stretch = 1 + pop * JUICE.eatPopScale
     const squash = 1 / stretch
-    const r = CELL * 0.44
+    const r = CELL * 0.47
 
     /**
      * Blink, on a cycle that shares no small common multiple with the tongue

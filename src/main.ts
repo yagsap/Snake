@@ -26,6 +26,7 @@ import {
   type WordEntry,
 } from './game/levels'
 import { MODES, type Mode } from './game/modes'
+import { botTurn } from './game/bot'
 import { comboMultiplier, hitsToMaster, isMastered } from './game/progression'
 import { World } from './game/world'
 import { Renderer } from './render/renderer'
@@ -490,6 +491,7 @@ function makeLevelFlowScene(next: LevelSpec, nextIndex: number, perfect: boolean
       timer = setTimeout(() => {
         if (scenes.top?.name === 'levelflow') {
           scenes.replaceAll(makePlayScene(levelRun(next, nextIndex)))
+          goJuice() // after enter(): renderer.reset has run, the text survives
         }
       }, 1700)
     },
@@ -612,15 +614,133 @@ function makeCampaignScene(): Scene {
  * voice speaking, within seconds of opening the app.
  */
 function makeOnboardScene(): Scene {
+  let demo: World | null = null
+  const disposers: Array<() => void> = []
   return {
     name: 'onboard',
     enter() {
       onboardView.open()
+      // The attract mode: a real game plays itself behind the language
+      // picker. Wordless onboarding — a new player WATCHES the loop happen
+      // (tile lands, snake eats the match) while choosing what to learn.
+      // Throwaway stats, neutral deck: the demo never touches real data.
+      playScr.hidden = false
+      playScr.classList.add('demo')
+      renderer.reset()
+      const w = new World({
+        table: buildTable('ja', 'hiragana'),
+        stats: {},
+        mode: MODES.drift,
+        seed: 7,
+        neutral: true,
+      })
+      demo = w
+      disposers.push(
+        w.events.on('eat', ({ item }) => {
+          const c = renderer.centerOf(item)
+          renderer.popEat()
+          renderer.fx.ring(c.x, c.y, THEME.jade, JUICE.ringLife)
+        }),
+        w.events.on('moved', () => {
+          const p = w.prevSnake[0]
+          if (p) {
+            renderer.wake.ring(
+              p.x * CELL + CELL / 2, p.y * CELL + CELL / 2,
+              WAKE_TRAIL, 0.7, CELL * 0.8,
+            )
+          }
+        }),
+        // One decision per MOVE, not per tick. At 60Hz against a ~0.24s
+        // move the bot re-scored ~14 times per step, and with a random
+        // tiebreak it could queue a second, already-stale turn into the
+        // 2-deep buffer — the demo snake visibly double-turning at corners.
+        w.events.on('moved', () => botTurn(w)),
+        w.events.on('death', () => w.reset()),
+      )
+      w.reset()
+      botTurn(w)
     },
     exit() {
       onboardView.close()
+      for (const d of disposers) d()
+      disposers.length = 0
+      demo = null
+      playScr.classList.remove('demo')
+      playScr.hidden = true
+      renderer.reset()
+    },
+    update(dt) {
+      demo?.update(dt)
+    },
+    render(alpha, dt) {
+      if (!demo) return
+      renderer.update(dt)
+      renderer.draw(demo, demo.renderAlpha(alpha * FIXED_DT), {
+        paused: false,
+        dimmed: false,
+      })
     },
   }
+}
+
+/**
+ * The fresh-run countdown — reading time, not dead time. The board below is
+ * fully laid out and the first cue has already spoken, so the player spends
+ * these seconds finding their target instead of waiting. A tap skips; a
+ * swipe pre-queues the opening turn. Auto-advance between levels does NOT
+ * count down — its celebration beat already covers the gap.
+ */
+function makeReadyScene(): Scene {
+  let left = JUICE.readySeconds
+  let shown = Number.POSITIVE_INFINITY
+  return {
+    name: 'ready',
+    drawsBelow: true,
+    enter() {
+      // The one-line tutorial, shown only before anyone's very first bite.
+      if (Object.keys(data.stats).length === 0) {
+        renderer.fx.text(
+          BOARD.size / 2, CELL * 2,
+          'eat the character you hear', THEME.gold,
+          JUICE.readySeconds + 1, 18,
+        )
+      }
+    },
+    update(dt) {
+      left -= dt
+      // The tiles must be READABLE while time is frozen — their entry
+      // animation runs off item age, which the paused simulation would
+      // never advance. Age is presentation state; ticking it here changes
+      // nothing the simulation decides.
+      if (world) for (const it of world.items) it.age += dt
+      const n = Math.ceil(left)
+      if (n < shown && n >= 1) {
+        shown = n
+        renderer.fx.text(BOARD.size / 2, BOARD.size / 2, String(n), THEME.gold, 0.85, 64)
+        tones.count()
+      }
+      if (left <= 0) skipReady()
+    },
+  }
+}
+
+/** End the countdown (naturally or by tap) and let the run begin. */
+function skipReady(): void {
+  if (scenes.top?.name !== 'ready') return
+  scenes.pop()
+  goJuice()
+}
+
+/** The "go" beat that releases a run into motion. */
+function goJuice(): void {
+  renderer.fx.text(BOARD.size / 2, BOARD.size / 2, 'go', THEME.jadeBright, 0.5, 44)
+  tones.go()
+}
+
+/** Every fresh start runs through here: play scene plus the countdown. */
+function startRun(r: RunConfig): void {
+  scenes.replaceAll(makePlayScene(r))
+  scenes.push(makeReadyScene())
 }
 
 function makeMenuScene(message?: string): Scene {
@@ -669,13 +789,13 @@ const menuView = new MenuView({
     menuView.render(data)
   },
   onPlay() {
-    scenes.replaceAll(makePlayScene(endlessRun()))
+    startRun(endlessRun())
   },
   onCampaign() {
     scenes.push(makeCampaignScene())
   },
   onDaily() {
-    scenes.replaceAll(makePlayScene(dailyRun()))
+    startRun(dailyRun())
   },
   onLearn() {
     scenes.push(makeChartScene(table))
@@ -692,13 +812,13 @@ const onboardView = new OnboardView((lang) => {
   syncVoices()
   save(data)
   const first = CAMPAIGNS[data.lang][0]
-  if (first) scenes.replaceAll(makePlayScene(levelRun(first, 0)))
+  if (first) startRun(levelRun(first, 0))
   else scenes.replaceAll(makeMenuScene())
 })
 
 const campaignView = new CampaignView(
   (level, index) => {
-    scenes.replaceAll(makePlayScene(levelRun(level, index)))
+    startRun(levelRun(level, index))
   },
   () => {
     if (scenes.top?.name === 'campaign') scenes.pop()
@@ -711,13 +831,13 @@ const levelEndView = new LevelEndView(
     const levels = CAMPAIGNS[data.lang]
     const next = run ? levels[run.levelIndex + 1] : undefined
     if (next && run) {
-      scenes.replaceAll(makePlayScene(levelRun(next, run.levelIndex + 1)))
+      startRun(levelRun(next, run.levelIndex + 1))
     }
   },
   () => {
     // Retry / replay
     if (run?.level) {
-      scenes.replaceAll(makePlayScene(levelRun(run.level, run.levelIndex)))
+      startRun(levelRun(run.level, run.levelIndex))
     }
   },
   () => {
@@ -777,7 +897,7 @@ function applyPadSetting(): void {
 
 const gameOverView = new GameOverView(
   () => {
-    if (run) scenes.replaceAll(makePlayScene(run.daily ? dailyRun() : endlessRun()))
+    if (run) startRun(run.daily ? dailyRun() : endlessRun())
   },
   () => {
     scenes.replaceAll(makeMenuScene(runSummary()))
@@ -849,7 +969,8 @@ function syncVoices(): void {
 // ever covers a character.
 bindInput(playScr, {
   onTurn(dir: Dir) {
-    if (scenes.top?.name !== 'play') return
+    const top = scenes.top?.name
+    if (top !== 'play' && top !== 'ready') return
     // Never inline this into the diag call: `diag?.turn(world.turn(dir))`
     // short-circuits the ARGUMENT too when diag is off, which silently
     // disabled steering for everyone without the debug flag.
@@ -861,7 +982,19 @@ bindInput(playScr, {
     switch (action) {
       case 'replay-cue':
       case 'tap':
-        if ((top === 'play' || top === 'pause') && world?.target && !run?.reverse) {
+        // A TAP skips the countdown; SPACE does not. Space is the established
+        // replay-the-cue binding, and reading time is exactly when a player
+        // wants to hear the target again — launching the run instead would
+        // punish the keyboard player for using the key as taught.
+        if (top === 'ready' && action === 'tap') {
+          skipReady()
+          break
+        }
+        if (
+          (top === 'play' || top === 'pause' || top === 'ready') &&
+          world?.target &&
+          !run?.reverse
+        ) {
           hud.pulseSeal()
           speech.speak(run?.words && world.word ? world.word.w : world.target)
         }
@@ -909,7 +1042,7 @@ bindInput(playScr, {
     // screen is exactly where a learner studies the sound. Turns are still
     // gated per-action above.
     const top = scenes.top?.name
-    return top !== 'play' && top !== 'pause'
+    return top !== 'play' && top !== 'pause' && top !== 'ready'
   },
 })
 
