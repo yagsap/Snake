@@ -40,6 +40,7 @@ export type LevelKind =
   | 'reverse'
   | 'ear'
   | 'phonics'
+  | 'count'
 
 export interface LevelGoal {
   /** Correct eats (or completed words, in a words level) needed to clear. */
@@ -83,6 +84,7 @@ export const KIND_ICON: Record<LevelKind, string> = {
   reverse: '🔁',
   ear: '👂',
   phonics: '🔊',
+  count: '🔢',
 }
 
 export const KIND_LABEL: Record<LevelKind, string> = {
@@ -92,6 +94,7 @@ export const KIND_LABEL: Record<LevelKind, string> = {
   reverse: 'recall',
   ear: 'listen',
   phonics: 'sounds',
+  count: 'count',
 }
 
 // ---------------------------------------------------------------- layouts --
@@ -197,6 +200,14 @@ const phonics = (title: string, chars: string, opts: Partial<Draft> = {}): Draft
   ),
   goal: G(10, 3), paceScale: 0.7, ...opts,
 })
+/**
+ * A counting level: the cue is a QUANTITY, shown as dots, and the answer is
+ * the numeral that means it. Zero is excluded on purpose — a cue of no dots
+ * is indistinguishable from a cue that has not loaded.
+ */
+const count = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
+  title, kind: 'count', chars, goal: G(10, 3), paceScale: 0.7, ...opts,
+})
 const reverse = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
   title, kind: 'reverse', chars, goal: G(12, 3), paceScale: 0.75, ...opts,
 })
@@ -208,6 +219,7 @@ const JA: Draft[] = [
   chapter('first vowels', 'あいうえお', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('count to five', '一二三四五', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '六七八九十〇一二三四五', { goal: G(12, 3), paceScale: 0.8 }),
+  count('how many?', '一二三四五'),
   chapter('the k row', 'かきくけこあいうえお'),
   chapter('the s row', 'さしすせそかきくけこ'),
   gauntlet('sneaky three', 'さきち'),
@@ -290,6 +302,7 @@ const JA: Draft[] = [
 const ZH: Draft[] = [
   chapter('numbers I', '一二三四五', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('numbers II', '六七八九十一二三四五'),
+  count('how many?', '一二三四五'),
   chapter('people', '人大天太夫小'),
   gauntlet('person or enter?', '人入大天太夫'),
   chapter('nature', '日月水火山木', { layout: 'garden' }),
@@ -316,6 +329,7 @@ const RU: Draft[] = [
   chapter('familiar friends', 'АКМОТЕ', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
+  count('how many?', '12345'),
   chapter('false friends', 'ВНРСУХАКМОТЕ'),
   gauntlet('lookalike pack', 'ВБНПР'),
   chapter('new shapes I', 'ГДЖЗЛВНРСУ', { layout: 'garden' }),
@@ -340,6 +354,7 @@ const HI: Draft[] = [
   chapter('vowels I', 'अआइईउऊ', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('count to five', '१२३४५', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '६७८९०१२३४५', { goal: G(12, 3), paceScale: 0.8 }),
+  count('how many?', '१२३४५'),
   chapter('vowels II', 'एऐओऔअआइईउऊ'),
   gauntlet('vowel pairs', 'अआइईउऊएऐओऔ', { goal: G(12, 2) }),
   chapter('velars & palatals', 'कखगघचछजझ'),
@@ -368,6 +383,7 @@ const EN: Draft[] = [
   phonics('sounds: A to E', 'ABCDE'),
   chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
+  count('how many?', '12345'),
   chapter('F to J', 'FGHIJABCDE'),
   gauntlet('the bee family', 'BCDEGPTVZ', { goal: G(12, 2) }),
   chapter('K to O', 'KLMNOFGHIJ', { layout: 'garden' }),
@@ -428,6 +444,7 @@ const KO: Draft[] = [
   chapter('first consonants', 'ㄱㄴㄷㄹㅁ', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('count to five', '일이삼사오', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '육칠팔구십영일이삼사오', { goal: G(12, 3), paceScale: 0.8 }),
+  count('how many?', '일이삼사오'),
   chapter('more consonants', 'ㅂㅅㅇㅈㅎㄱㄴㄷㄹㅁ'),
   chapter('the aspirated', 'ㅋㅌㅍㅊㄱㄷㅂㅈ', { layout: 'garden' }),
   gauntlet('one more stroke', 'ㄱㅋㄷㅌㅂㅍㅈㅊ', { goal: G(12, 2) }),
@@ -458,6 +475,7 @@ const EL: Draft[] = [
   chapter('alpha to epsilon', 'ΑΒΓΔΕ', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
+  count('how many?', '12345'),
   chapter('zeta to kappa', 'ΖΗΘΙΚΑΒΓΔΕ'),
   chapter('lambda to xi', 'ΛΜΝΞΖΗΘΙΚ', { layout: 'garden' }),
   gauntlet('the i sounds', 'ΗΙΥΕΟ', { goal: G(12, 2) }),

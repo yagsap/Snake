@@ -1,0 +1,5 @@
+{
+  "_readme": "Recorded voice clips. Drop files into this directory and list their keys below; no code change is needed. A key is <lang>/<codepoints> for a character (see clipKey in src/ui/clips.ts) or <lang>/<name> for a named cue such as an English phoneme. Anything not listed here falls back to speech synthesis, which is the current shipping state.",
+  "ext": "m4a",
+  "clips": []
+}

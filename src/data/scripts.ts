@@ -157,6 +157,21 @@ export interface Language {
   readonly sets: Readonly<Record<string, CharTable>>
 }
 
+/**
+ * How many a numeral means, for the counting levels.
+ *
+ * Derived from position in the language's `numbers` set rather than from a
+ * second hand-written table, because every one of those sets is authored in
+ * counting order starting at zero — so the index IS the value, and a second
+ * table would only be a chance for the two to disagree.
+ */
+export function numeralValue(lang: LangId, ch: string): number | null {
+  const set = (LANGUAGES[lang].sets as Record<string, CharTable>)['numbers']
+  if (!set) return null
+  const i = Object.keys(set).indexOf(ch)
+  return i < 0 ? null : i
+}
+
 export const LANGUAGES = {
   en: {
     name: 'English',

@@ -68,6 +68,27 @@ export class Hud {
     this.cueEl.textContent = text
   }
 
+  /**
+   * A quantity, drawn as dots, for the counting levels.
+   *
+   * The cue is deliberately SILENT and visual here. Speaking "three" and
+   * asking for 三 is a listening task the game already has a dozen of; showing
+   * three dots and asking for 三 is subitizing — recognising how many without
+   * counting — which is the actual early-maths skill and the reason these
+   * levels exist.
+   *
+   * Laid out five to a row, so six through ten read as "a full row and some"
+   * rather than a line the child has to count along. That grouping is the
+   * whole point: a tens frame is legible at a glance, a row of ten is not.
+   */
+  setCueDots(n: number): void {
+    this.cueEl.textContent = ''
+    const wrap = document.createElement('span')
+    wrap.className = 'dots'
+    for (let i = 0; i < n; i++) wrap.appendChild(document.createElement('i'))
+    this.cueEl.appendChild(wrap)
+  }
+
   /** Big-glyph styling for reverse levels, where the cue IS the character. */
   setCueGlyph(on: boolean): void {
     this.sealEl.classList.toggle('glyph-cue', on)

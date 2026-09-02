@@ -204,6 +204,11 @@
 #focusNext .lvlGlyphs{display:inline;font-size:13px;color:#9AA3B8}
 /* Characters carried forward from earlier levels, set back from the new ones. */
 .lvlGlyphs em{font-style:normal;color:#6E7794;font-size:.86em;margin-left:.45em}
+/* Quantity cues: dots in a tens frame, five to a row. */
+.dots{display:grid;grid-template-columns:repeat(5,7px);gap:4px;justify-content:center;align-content:center}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--washi);display:block}
+.seal .dots{margin:0 auto}
+
 /* The parent gate's fill: the bar IS the feedback, and the warning. */
 #resetBtn{position:relative;overflow:hidden;--hold:0%}
 #resetBtn.holding::before{content:'';position:absolute;inset:0;width:var(--hold);

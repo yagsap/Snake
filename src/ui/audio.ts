@@ -1,4 +1,5 @@
 import { LANGUAGES, type LangId } from '../data/scripts'
+import { Clips, clipKey } from './clips'
 import { nativeSpeak, nativeSpeakAvailable, nativeWarmup } from './native'
 
 /**
@@ -60,6 +61,9 @@ export class Speech {
   get current(): SpeechSynthesisVoice | null {
     return this.voice
   }
+
+  /** Recorded-voice layer; empty until clips ship. See src/ui/clips.ts. */
+  readonly clips = new Clips()
 
   setLanguage(lang: LangId): void {
     this.lang = lang
@@ -154,6 +158,11 @@ export class Speech {
 
   speak(text: string): void {
     if (!text || this.muted) return
+    // A recorded human voice when one exists for this exact cue, TTS when it
+    // does not. `play` answers synchronously and reports false for a clip it
+    // has not decoded yet, so the player hears synthesis this time and the
+    // recording next — the one thing that must never happen here is silence.
+    if (this.clips.play(clipKey(this.lang, text))) return
     // In the app: our own native bridge, which holds one audio session open
     // forever and does all speech work off the main thread. A second device
     // A/B showed even the webview engine paying a per-utterance session

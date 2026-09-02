@@ -14,7 +14,13 @@ import { FIXED_DT, GameLoop } from './core/loop'
 import { bindInput, DIR_VECTORS, type Dir } from './core/input'
 import { SceneStack, type Scene } from './core/scene'
 import { load, save, saveNow, type SaveData } from './core/storage'
-import { buildTable, LANGUAGES, setNamesFor, type CharTable } from './data/scripts'
+import {
+  buildTable,
+  LANGUAGES,
+  numeralValue,
+  setNamesFor,
+  type CharTable,
+} from './data/scripts'
 import { BOARD, CELL, JUICE, THEME } from './game/config'
 import {
   CAMPAIGNS,
@@ -95,6 +101,8 @@ interface RunConfig {
   earOnly: boolean
   /** Cue is a spoken keyword and the answer is its first letter. */
   phonics: boolean
+  /** Cue is a quantity of dots and the answer is the numeral for it. */
+  counting: boolean
   /** Cap on body length; undefined leaves the classic unbounded snake. */
   maxLength?: number
   /** Narrow the board after a miss — see WorldOptions.scaffold. */
@@ -117,6 +125,7 @@ function endlessRun(): RunConfig {
     reverse: false,
     earOnly: false,
     phonics: false,
+    counting: false,
     scaffold: false,
     obstacles: null,
     level: null,
@@ -172,6 +181,7 @@ function levelRun(level: LevelSpec, index: number): RunConfig {
     reverse: level.kind === 'reverse',
     earOnly: level.kind === 'ear',
     phonics: level.kind === 'phonics',
+    counting: level.kind === 'count',
     // Stones are a boss-level hazard. In a learn level they are one more way
     // to lose that has nothing to do with reading a character.
     obstacles: level.layout && isBoss(level) ? layoutCells(level.layout) : null,
@@ -325,7 +335,18 @@ function makePlayScene(r: RunConfig): Scene {
       const showCue = (target: string, sound: string) => {
         diag?.mark('cue')
         tones.duck()
-        if (r.phonics) {
+        if (r.counting) {
+          /**
+           * A quantity, not a word. Silent on purpose: speaking "three" and
+           * asking for 三 is one more listening task, where showing three dots
+           * and asking for 三 is subitizing — the actual early-maths skill,
+           * and the only cue in the game a child can answer without hearing
+           * anything at all.
+           */
+          const n = numeralValue(data.lang, target)
+          if (n === null) hud.setCue(sound)
+          else hud.setCueDots(n)
+        } else if (r.phonics) {
           /**
            * Phonics: the cue is a WORD, and the child eats the letter it
            * starts with. The word is spoken and also shown — a child who
@@ -1427,6 +1448,11 @@ function wireSpeakOnTouch(): void {
   )
 }
 wireSpeakOnTouch()
+
+// Read the clip manifest once at boot. It touches no AudioContext, so it is
+// safe before a user gesture; absent or empty simply means every cue uses
+// speech synthesis, which is the shipping state today.
+void speech.clips.load(import.meta.env.BASE_URL)
 
 scenes.push(data.onboarded ? makeMenuScene() : makeOnboardScene())
 loop.start()
