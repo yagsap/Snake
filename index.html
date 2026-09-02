@@ -204,6 +204,13 @@
 #focusNext .lvlGlyphs{display:inline;font-size:13px;color:#9AA3B8}
 /* Characters carried forward from earlier levels, set back from the new ones. */
 .lvlGlyphs em{font-style:normal;color:#6E7794;font-size:.86em;margin-left:.45em}
+/* The parent gate's fill: the bar IS the feedback, and the warning. */
+#resetBtn{position:relative;overflow:hidden;--hold:0%}
+#resetBtn.holding::before{content:'';position:absolute;inset:0;width:var(--hold);
+  background:rgba(230,59,46,.45);transition:width .06s linear;pointer-events:none}
+#resetBtn.holding{border-color:rgba(230,59,46,.7)}
+.lvl .kind{font-size:19px;line-height:1;margin-right:2px;flex:0 0 auto;opacity:.9}
+.lvl.locked .kind{opacity:.3;filter:grayscale(1)}
 .lvl.current{border-color:rgba(154,209,178,.55);background:rgba(154,209,178,.07)}
 .lvl.current .state{color:#9AD1B2}
 </style>

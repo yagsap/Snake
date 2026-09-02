@@ -1,5 +1,7 @@
 import type { SaveData } from '../core/storage'
-import { CAMPAIGNS, KIND_LABEL, dateKey, type LevelSpec, levelChars } from '../game/levels'
+import {
+  CAMPAIGNS, KIND_ICON, KIND_LABEL, dateKey, type LevelSpec, levelChars,
+} from '../game/levels'
 import {
   LANGUAGES,
   LANG_IDS,
@@ -260,8 +262,14 @@ export class CampaignView {
           ? lvl.words.map((e) => e.w).slice(0, 4).join(' ')
           : cap(fresh, 10) +
             (revised.length ? `<em>+${cap(revised, 8)}</em>` : '')
-        return `<button class="lvl ${cls}" data-i="${i}">
+        // Spoken label, for a player who cannot read the row. The number
+        // first, because that is how a child refers to where they are.
+        const say = unlocked
+          ? `Level ${i + 1}. ${lvl.title}. ${KIND_LABEL[lvl.kind]}`
+          : `Level ${i + 1}. Locked.`
+        return `<button class="lvl ${cls}" data-i="${i}" data-say="${say}">
           <span class="num">${i + 1}</span>
+          <span class="kind" aria-hidden="true">${KIND_ICON[lvl.kind]}</span>
           <span class="meta">
             <b>${lvl.title}</b>
             <span class="lvlGlyphs">${glyphs}</span>
@@ -297,6 +305,8 @@ export interface LevelEndStats {
 
 export class LevelEndView {
   private root = $('lvlEndScr')
+  /** Injected so this view does not have to know what the audio layer is. */
+  speak: (text: string) => void = () => {}
 
   constructor(onNext: () => void, onRetry: () => void, onMenu: () => void) {
     $('lvlNextBtn').addEventListener('click', onNext)
@@ -305,9 +315,14 @@ export class LevelEndView {
   }
 
   show(stats: LevelEndStats): void {
-    $('lvlEndTitle').textContent = stats.cleared
-      ? stats.perfect ? 'perfect clear' : 'level clear'
-      : 'level failed'
+    const title = stats.cleared
+      ? stats.perfect ? 'Perfect!' : 'Well done!'
+      : 'Good try!'
+    $('lvlEndTitle').textContent = title
+    // The card says itself out loud. An end card is the one screen a child
+    // reliably meets alone, and "level failed" is a hard thing to read when
+    // you cannot read — so it is now a kind sentence, spoken.
+    this.speak(`${title} ${stats.detail}`)
     $('lvlEndTitle').classList.toggle('gold', stats.cleared && stats.perfect)
     $('lvlEndName').textContent = stats.levelTitle
     $('lvlEndDetail').textContent = stats.detail
@@ -315,7 +330,7 @@ export class LevelEndView {
     learn.textContent = stats.receipt
     learn.hidden = !stats.receipt
     $('lvlNextBtn').hidden = !(stats.cleared && stats.hasNext)
-    $('lvlRetryBtn').textContent = stats.cleared ? 'replay' : 'retry'
+    $('lvlRetryBtn').textContent = stats.cleared ? 'Play again' : 'Try again'
     this.root.hidden = false
   }
 
@@ -346,7 +361,54 @@ export class ChartView {
 
   constructor(private cb: ChartCallbacks) {
     $('learnClose').addEventListener('click', () => cb.onClose())
-    $('resetBtn').addEventListener('click', () => cb.onReset())
+    /**
+     * A parent gate on the one destructive control in the app.
+     *
+     * "Reset progress" sat behind a native confirm() one tap away, on a screen
+     * a child reaches from the menu — and a confirm dialog is exactly the kind
+     * of thing a four-year-old dismisses by tapping the bigger button. Months
+     * of a child's work should not be one accidental double-tap from gone.
+     *
+     * A three-second deliberate hold is the standard gate: trivial for an
+     * adult who means it, and something a child does not do by accident,
+     * because letting go cancels it. The bar filling is the whole feedback —
+     * it also tells a curious child exactly what to stop doing.
+     */
+    const reset = $('resetBtn')
+    const HOLD_MS = 3000
+    let holdStart = 0
+    let raf = 0
+    const paint = (p: number) => {
+      reset.style.setProperty('--hold', `${Math.round(p * 100)}%`)
+      reset.classList.toggle('holding', p > 0)
+    }
+    const stop = () => {
+      cancelAnimationFrame(raf)
+      holdStart = 0
+      paint(0)
+      reset.textContent = 'hold to reset'
+    }
+    const tick = () => {
+      if (!holdStart) return
+      const p = Math.min(1, (performance.now() - holdStart) / HOLD_MS)
+      paint(p)
+      if (p >= 1) {
+        stop()
+        cb.onReset()
+        return
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    reset.textContent = 'hold to reset'
+    reset.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      holdStart = performance.now()
+      reset.textContent = 'keep holding…'
+      raf = requestAnimationFrame(tick)
+    })
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+      reset.addEventListener(ev, stop)
+    }
     this.sortBtn.addEventListener('click', () => {
       this.weakFirst = !this.weakFirst
       this.lastRender?.()

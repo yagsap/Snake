@@ -190,6 +190,48 @@ export class Speech {
     }, 0)
   }
 
+  /**
+   * Speak an INTERFACE label — a button, a card, a level name.
+   *
+   * Deliberately separate from `speak`, which uses the voice of the language
+   * being learned: a Japanese voice reading "All levels" is not help, it is
+   * noise. This is the app talking to the child in the language they already
+   * speak, so a player who cannot read a single word on the screen can still
+   * find out what everything does by touching it.
+   *
+   * It never cancels and never queues behind the cue. UI speech happens on
+   * menus, where nothing else is talking; treating it as interruptible chatter
+   * rather than content is what keeps it from fighting the lesson.
+   */
+  sayUI(text: string): void {
+    const say = text.trim()
+    if (!say || this.muted) return
+    if (nativeSpeak(say, 'en')) return
+    const voice = this.uiVoice()
+    if (!voice) return
+    const u = new SpeechSynthesisUtterance(say)
+    u.voice = voice
+    u.lang = voice.lang
+    // A shade slower than an adult would read it, and no slower — children
+    // tune out speech that sounds like it is being spelled at them.
+    u.rate = 0.92
+    speechSynthesis.speak(u)
+  }
+
+  private uiVoiceCache: SpeechSynthesisVoice | null = null
+
+  /** An English voice, chosen from the FULL list rather than `available`,
+   *  which only ever holds voices for the language being learned. */
+  private uiVoice(): SpeechSynthesisVoice | null {
+    if (this.uiVoiceCache) return this.uiVoiceCache
+    const all = speechSynthesis.getVoices()
+    this.uiVoiceCache =
+      all.find((v) => v.lang.toLowerCase().startsWith('en') && v.localService) ??
+      all.find((v) => v.lang.toLowerCase().startsWith('en')) ??
+      null
+    return this.uiVoiceCache
+  }
+
   private speakNow(text: string): void {
     const voice = this.voice
     if (!voice) return

@@ -725,11 +725,18 @@ function makeLevelEndScene(
         cleared,
         perfect,
         levelTitle: r.level?.title ?? '',
+        /**
+         * One short line, in words a five-year-old hears every day. The old
+         * copy — "too many misses — study the chart and try again" — is a
+         * sentence written for the developer: it names a screen the child
+         * cannot find and tells them to study. The card also speaks itself,
+         * because the child this is addressed to cannot read it.
+         */
         detail: cleared
-          ? `${w.score} points · ${w.mistakes} ${w.mistakes === 1 ? 'miss' : 'misses'}`
+          ? `${w.score} points`
           : w.alive
-            ? 'too many misses — study the chart and try again'
-            : 'crashed — steady does it',
+            ? 'Nearly! Have another go.'
+            : 'Oops, you bumped into yourself.',
         hasNext: r.levelIndex >= 0 && r.levelIndex + 1 < levels.length,
         receipt: runReceipt(w),
       })
@@ -1063,6 +1070,8 @@ const levelEndView = new LevelEndView(
     scenes.push(makeCampaignScene())
   },
 )
+// The end card speaks itself — see LevelEndView.speak.
+levelEndView.speak = (t) => speech.sayUI(t)
 
 const chartView = new ChartView({
   onSpeak: (ch) => speech.speak(ch),
@@ -1386,6 +1395,39 @@ tones.musicOn = data.music
 chartView.syncSettings(data)
 hud.setSealHidden(!data.showRomaji && !!speech.current)
 syncVoices()
+/**
+ * Touch anything and it tells you what it is.
+ *
+ * This app is for children learning to read, and every label on it is
+ * written in words they cannot read yet. Rather than pretend otherwise, any
+ * control speaks itself when touched — which turns the whole interface into
+ * something a pre-reader can explore by ear, and costs one listener.
+ *
+ * `data-say` overrides the visible text where the visible text would read
+ * badly aloud ("All levels · 6/42" is a mouthful; "All levels" is not). The
+ * fallback strips the score-ish tail after a middle dot for the same reason.
+ * Cue and glyph elements are excluded: they belong to the LESSON, and having
+ * the interface voice read the answer in English would hand it over.
+ */
+function wireSpeakOnTouch(): void {
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      const el = (e.target as HTMLElement | null)?.closest<HTMLElement>(
+        'button, .lvl, .chip, .pill, [data-say]',
+      )
+      // Never during play. The steering pad is made of buttons, and having
+      // the interface announce "up arrow" every time a child steers would be
+      // both maddening and a way to talk over the cue they are trying to hear.
+      if (!el || el.closest('#seal, .glyph, .chart, #playScr')) return
+      const said = el.dataset['say'] ?? el.textContent ?? ''
+      speech.sayUI(said.split('·')[0] as string)
+    },
+    { passive: true },
+  )
+}
+wireSpeakOnTouch()
+
 scenes.push(data.onboarded ? makeMenuScene() : makeOnboardScene())
 loop.start()
 

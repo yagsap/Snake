@@ -68,6 +68,23 @@ export interface LevelSpec {
   layout?: LayoutName
 }
 
+/**
+ * A picture for each kind of level.
+ *
+ * The word "gauntlet" is unreadable to a five-year-old and "boss" barely
+ * better; a trophy is not. These are not decoration — they are the only part
+ * of a level row a pre-reader can use to tell one kind of challenge from
+ * another, alongside the characters themselves.
+ */
+export const KIND_ICON: Record<LevelKind, string> = {
+  chapter: '✏️',
+  gauntlet: '🏆',
+  words: '📖',
+  reverse: '🔁',
+  ear: '👂',
+  phonics: '🔊',
+}
+
 export const KIND_LABEL: Record<LevelKind, string> = {
   chapter: 'learn',
   gauntlet: 'boss',
