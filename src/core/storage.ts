@@ -82,6 +82,9 @@ export interface SaveData {
   /** Show the on-screen arrow buttons. Off by default — drag-steering is the
    *  hero control; the buttons remain as an accessibility option. */
   showPad: boolean
+  /** Ambient music. On by default — it is generated, quiet, and ducks under
+   *  the spoken cue, so it adds atmosphere without ever masking the answer. */
+  music: boolean
 }
 
 const defaults = (): SaveData => ({
@@ -99,6 +102,7 @@ const defaults = (): SaveData => ({
   reducedMotion: false,
   onboarded: false,
   showPad: false,
+  music: true,
 })
 
 const num = (v: unknown, fallback = 0): number =>
@@ -206,6 +210,7 @@ export function load(): SaveData {
       Object.keys(parseStats(d['stats'])).length > 0 ||
       Math.max(0, num(d['bestScore'])) > 0,
     showPad: bool(d['showPad'], false),
+    music: bool(d['music'], true),
   }
 }
 

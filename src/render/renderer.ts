@@ -7,6 +7,7 @@ import { speedBonusFactor } from '../game/progression'
 import { Camera } from './camera'
 import { Flash, FxSystem } from './fx'
 import { createBackground, drawWalls } from './background'
+import { Sprites } from './sprites'
 
 const W = BOARD.size
 const TWO_PI = Math.PI * 2
@@ -155,6 +156,8 @@ export class Renderer {
    *  way as everything else. */
   readonly wake = new FxSystem()
   readonly flash = new Flash()
+  /** The board's inhabitants — see src/render/sprites.ts. */
+  readonly sprites = new Sprites()
 
   private ctx: CanvasRenderingContext2D
   private background: HTMLCanvasElement
@@ -231,11 +234,14 @@ export class Renderer {
     const v = enabled ? 1 : 0
     this.camera.intensity = v
     this.fx.intensity = v
+    this.sprites.intensity = v
+    if (!enabled) this.sprites.clear()
     this.wake.intensity = v
     this.flash.intensity = v
   }
 
   reset(): void {
+    this.sprites.clear()
     this.fx.clear()
     this.wake.clear()
     this.flash.clear()
@@ -261,6 +267,7 @@ export class Renderer {
   update(realDt: number): void {
     this.clock += realDt
     this.camera.update(realDt)
+    this.sprites.update(realDt)
     this.fx.update(realDt)
     this.wake.update(realDt)
     this.flash.update(realDt)
@@ -285,6 +292,7 @@ export class Renderer {
     if (!world.mode.wrap) drawWalls(ctx, this.dangerNear(world))
     this.drawObstacles(world)
     this.drawItems(world)
+    this.sprites.draw(ctx)
     this.drawSnake(world, alpha)
     this.fx.draw(ctx)
 

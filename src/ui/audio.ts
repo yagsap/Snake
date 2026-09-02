@@ -8,6 +8,14 @@ import { nativeSpeak, nativeSpeakAvailable, nativeWarmup } from './native'
  * never calls into audio directly.
  */
 
+/** How loud the ambient bed sits. Deliberately low: it is a room tone, not
+ *  a soundtrack, and the spoken cue must always win. */
+const MUSIC_LEVEL = 0.055
+
+/** A pentatonic scale — any two notes sound consonant together, which is what
+ *  lets the wandering voices drift without ever clashing. */
+const PENTATONIC = [196, 220, 262, 294, 330, 392, 440] as const
+
 /** Voices that tend to sound less robotic, preferred when present. */
 const PREFERRED =
   /google|nanami|keita|kyoko|otoya|xiaoxiao|yunxi|tingting|milena|irina|swara|hemant|neural|natural|premium|enhanced/i
@@ -306,6 +314,115 @@ export class Tones {
     this.play(523, 0.1)
     this.play(659, 0.1, 'sine', 0.08, 0.08)
     this.play(784, 0.22, 'sine', 0.08, 0.16)
+  }
+
+  /**
+   * The ambient bed: two slow sine voices drifting through a pentatonic
+   * scale, plus a low drone.
+   *
+   * Generated rather than shipped. A music file would mean licensing, a
+   * download, and a decoder; a handful of oscillators means none of those and
+   * never repeats audibly. The pentatonic scale is chosen so any two notes
+   * sounding together are consonant — which is what lets voices drift freely
+   * without ever needing to agree.
+   *
+   * It ducks hard under speech. The cue IS the game; music that competes with
+   * the thing the player is straining to hear is worse than silence.
+   */
+  private bed: { gain: GainNode; stop: () => void } | null = null
+  musicOn = true
+
+  startMusic(): void {
+    if (!this.musicOn || this.bed) return
+    const ctx = this.ensure()
+    if (!ctx) return
+    try {
+      const out = ctx.createGain()
+      out.gain.value = 0
+      out.connect(ctx.destination)
+      // Fade in over four seconds: music that arrives suddenly is noticed,
+      // and this is meant to be felt rather than heard.
+      out.gain.linearRampToValueAtTime(MUSIC_LEVEL, ctx.currentTime + 4)
+
+      const nodes: OscillatorNode[] = []
+      // A drone a couple of octaves down holds the whole thing together.
+      const drone = ctx.createOscillator()
+      const dg = ctx.createGain()
+      drone.type = 'sine'
+      drone.frequency.value = 98 // G2
+      dg.gain.value = 0.5
+      drone.connect(dg).connect(out)
+      drone.start()
+      nodes.push(drone)
+
+      // Two wandering voices. Each waits a different, irrational-ish time
+      // between notes so the pair never settles into a loop.
+      for (let v = 0; v < 2; v++) {
+        const osc = ctx.createOscillator()
+        const g = ctx.createGain()
+        osc.type = 'sine'
+        g.gain.value = 0
+        osc.connect(g).connect(out)
+        osc.start()
+        nodes.push(osc)
+        const step = (): void => {
+          if (!this.bed) return
+          const t = ctx.currentTime
+          const note = PENTATONIC[Math.floor(Math.random() * PENTATONIC.length)] as number
+          osc.frequency.setValueAtTime(note * (v === 0 ? 1 : 2), t)
+          g.gain.cancelScheduledValues(t)
+          g.gain.setValueAtTime(0, t)
+          g.gain.linearRampToValueAtTime(0.5, t + 1.2)
+          g.gain.linearRampToValueAtTime(0, t + 3.4)
+          this.bedTimers.push(
+            setTimeout(step, 3200 + Math.random() * 2600 + v * 900),
+          )
+        }
+        this.bedTimers.push(setTimeout(step, 600 + v * 2100))
+      }
+
+      this.bed = {
+        gain: out,
+        stop: () => {
+          for (const n of nodes) {
+            try {
+              n.stop()
+            } catch {
+              /* already stopped */
+            }
+          }
+        },
+      }
+    } catch {
+      /* music is garnish; never worth taking the run down for */
+    }
+  }
+
+  stopMusic(): void {
+    for (const t of this.bedTimers) clearTimeout(t)
+    this.bedTimers.length = 0
+    const bed = this.bed
+    this.bed = null
+    if (!bed || !this.ctx) return
+    const t = this.ctx.currentTime
+    bed.gain.gain.cancelScheduledValues(t)
+    bed.gain.gain.setValueAtTime(bed.gain.gain.value, t)
+    bed.gain.gain.linearRampToValueAtTime(0, t + 0.6)
+    setTimeout(() => bed.stop(), 800)
+  }
+
+  private bedTimers: Array<ReturnType<typeof setTimeout>> = []
+
+  /** Duck the bed under a spoken cue, then let it breathe back in. */
+  duck(seconds = 1.6): void {
+    const ctx = this.ctx
+    if (!this.bed || !ctx) return
+    const g = this.bed.gain.gain
+    const t = ctx.currentTime
+    g.cancelScheduledValues(t)
+    g.setValueAtTime(g.value, t)
+    g.linearRampToValueAtTime(MUSIC_LEVEL * 0.18, t + 0.12)
+    g.linearRampToValueAtTime(MUSIC_LEVEL, t + seconds)
   }
 
   /** One soft tick per countdown number. */

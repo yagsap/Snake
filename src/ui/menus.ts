@@ -23,6 +23,8 @@ const $ = <T extends HTMLElement>(id: string): T => {
 }
 
 export interface MenuCallbacks {
+  /** The one primary action: play the right thing for this player, now. */
+  onContinue(): void
   onLang(lang: LangId): void
   onSet(setName: string): void
   onMode(mode: ModeId): void
@@ -41,6 +43,13 @@ export class MenuView {
   private snakeWord = $('snakeWord')
 
   constructor(private cb: MenuCallbacks) {
+    $('continueBtn').addEventListener('click', () => cb.onContinue())
+    const more = $('moreBtn')
+    more.addEventListener('click', () => {
+      const box = $('moreBox')
+      box.hidden = !box.hidden
+      more.textContent = box.hidden ? 'more ways to play ▾' : 'fewer options ▴'
+    })
     $('playBtn').addEventListener('click', () => cb.onPlay())
     $('campBtn').addEventListener('click', () => cb.onCampaign())
     $('dailyBtn').addEventListener('click', () => cb.onDaily())
@@ -61,6 +70,44 @@ export class MenuView {
 
   get visible(): boolean {
     return !this.root.hidden
+  }
+
+  /**
+   * The bullseye. A learner opening the app should see their goal and one
+   * button, not a menu of everything the app could do — choice at the door
+   * is the most reliable way to lose a session before it starts.
+   */
+  renderFocus(data: SaveData, mastered: number, total: number, due: number): void {
+    const pct = total ? Math.round((mastered / total) * 100) : 0
+    $('focusName').textContent = `${LANGUAGES[data.lang].name} · ${data.setName}`
+    $('focusStat').textContent = `${mastered} of ${total} mastered`
+    const dueEl = $('focusDue')
+    dueEl.textContent = due ? `${due} due for review` : 'all caught up — learn something new'
+    $('focusPct').textContent = `${pct}%`
+
+    const c = $<HTMLCanvasElement>('focusRing')
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    const dpr = Math.min(2, window.devicePixelRatio || 1)
+    if (c.width !== 132 * dpr) {
+      c.width = 132 * dpr
+      c.height = 132 * dpr
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, 132, 132)
+    const R = 56
+    ctx.lineWidth = 7
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = 'rgba(255,255,255,.09)'
+    ctx.beginPath()
+    ctx.arc(66, 66, R, 0, Math.PI * 2)
+    ctx.stroke()
+    if (pct > 0) {
+      ctx.strokeStyle = '#9AD1B2'
+      ctx.beginPath()
+      ctx.arc(66, 66, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (pct / 100))
+      ctx.stroke()
+    }
   }
 
   render(data: SaveData): void {
@@ -201,6 +248,7 @@ export interface ChartCallbacks {
   onShowRomaji(show: boolean): void
   onReducedMotion(reduced: boolean): void
   onShowPad(show: boolean): void
+  onMusic(on: boolean): void
 }
 
 export class ChartView {
@@ -231,6 +279,9 @@ export class ChartView {
     $<HTMLInputElement>('showPad').addEventListener('change', (e) =>
       cb.onShowPad((e.target as HTMLInputElement).checked),
     )
+    $<HTMLInputElement>('music').addEventListener('change', (e) =>
+      cb.onMusic((e.target as HTMLInputElement).checked),
+    )
   }
 
   private lastRender: (() => void) | null = null
@@ -253,6 +304,7 @@ export class ChartView {
     $<HTMLInputElement>('showSnd').checked = data.showRomaji
     $<HTMLInputElement>('reduceMotion').checked = data.reducedMotion
     $<HTMLInputElement>('showPad').checked = data.showPad
+    $<HTMLInputElement>('music').checked = data.music
   }
 
   setVoices(
@@ -397,6 +449,50 @@ export class GameOverView {
  * want to learn and is eating their first character seconds later; sets,
  * modes and settings introduce themselves once the game has proven itself.
  */
+/**
+ * The placement step: tap the characters you can already read.
+ *
+ * Respecting what a learner already knows is the cheapest way to make an app
+ * feel smart. Without it, someone who has known ん for years still gets asked
+ * about it, and the first session is spent proving things they came here
+ * knowing. Marked characters are seeded one rung below mastery — claimed, not
+ * yet proven — so they resurface once, in a week, to be confirmed.
+ */
+export class PlaceView {
+  private root = $('placeScr')
+  private grid = $('placeGrid')
+  private known = new Set<string>()
+
+  constructor(onDone: (known: Set<string>) => void) {
+    this.grid.addEventListener('click', (e) => {
+      const tile = (e.target as HTMLElement).closest<HTMLElement>('[data-ch]')
+      const ch = tile?.dataset.ch
+      if (!ch || !tile) return
+      if (this.known.has(ch)) this.known.delete(ch)
+      else this.known.add(ch)
+      tile.classList.toggle('known', this.known.has(ch))
+    })
+    $('placeDone').addEventListener('click', () => onDone(this.known))
+    $('placeSkip').addEventListener('click', () => onDone(new Set()))
+  }
+
+  open(table: CharTable, lang: LangId): void {
+    this.known.clear()
+    this.grid.style.setProperty('--cols', String(LANGUAGES[lang].chartColumns))
+    this.grid.innerHTML = Object.keys(table)
+      .map(
+        (c) =>
+          `<div class="tile" data-ch="${c}" role="button" tabindex="0"><b>${c}</b><i>${table[c]}</i></div>`,
+      )
+      .join('')
+    this.root.hidden = false
+  }
+
+  close(): void {
+    this.root.hidden = true
+  }
+}
+
 export class OnboardView {
   private root = $('onboardScr')
 

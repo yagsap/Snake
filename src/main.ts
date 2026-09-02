@@ -27,7 +27,13 @@ import {
 } from './game/levels'
 import { MODES, type Mode } from './game/modes'
 import { botTurn } from './game/bot'
-import { comboMultiplier, hitsToMaster, isMastered } from './game/progression'
+import {
+  comboMultiplier,
+  hitsToMaster,
+  isDue,
+  isMastered,
+  seedKnown,
+} from './game/progression'
 import { World } from './game/world'
 import { Renderer } from './render/renderer'
 import { Speech, Tones } from './ui/audio'
@@ -39,6 +45,7 @@ import {
   LevelEndView,
   MenuView,
   OnboardView,
+  PlaceView,
 } from './ui/menus'
 import { haptic, initNativeChrome, isNativeApp } from './ui/native'
 import { Diag } from './ui/diag'
@@ -173,6 +180,40 @@ function runReceipt(w: World): string {
   return parts.join(' · ')
 }
 
+/** Characters in the current focus, and how they stand. */
+function focusStats(): { total: number; mastered: number; due: number } {
+  const t = buildTable(data.lang, data.setName)
+  const chars = Object.keys(t)
+  const now = Date.now()
+  let mastered = 0
+  let due = 0
+  for (const c of chars) {
+    const s = data.stats[c]
+    if (s && isMastered(s)) mastered++
+    if (isDue(s, now)) due++
+  }
+  return { total: chars.length, mastered, due }
+}
+
+/**
+ * The one button. A player who opens the app has one sensible next move,
+ * and the app should know what it is: clear the review queue if anything is
+ * due, otherwise carry on down the campaign, otherwise just play. Making the
+ * player choose between Levels, Endless and Daily before every session is
+ * how sessions get postponed.
+ */
+function continueRun(): void {
+  const { due } = focusStats()
+  if (due > 0) {
+    startRun(endlessRun())
+    return
+  }
+  const levels = CAMPAIGNS[data.lang]
+  const next = levels.findIndex((l) => !data.campaign[l.id]?.cleared)
+  if (next >= 0) startRun(levelRun(levels[next] as LevelSpec, next))
+  else startRun(endlessRun())
+}
+
 const goalText = (r: RunConfig, w: World): string => {
   if (!r.level) return ''
   const done = r.words ? w.wordsDone : w.eaten
@@ -207,6 +248,7 @@ function makePlayScene(r: RunConfig): Scene {
       hud.setWord(null, 0)
       renderer.reset()
       tones.warmup() // we are inside the click that started the run
+      tones.startMusic()
 
       const w = new World({
         table: r.table,
@@ -224,6 +266,8 @@ function makePlayScene(r: RunConfig): Scene {
 
       const showCue = (target: string, sound: string) => {
         diag?.mark('cue')
+        renderer.sprites.peek()
+        tones.duck()
         if (r.reverse) {
           // The glyph IS the question; speaking it would answer a tile.
           hud.setCue(target)
@@ -267,6 +311,7 @@ function makePlayScene(r: RunConfig): Scene {
         // The game's biggest moment: a character joined the player for good.
         w.events.on('mastered', ({ item, ch }) => {
           const c = renderer.centerOf(item)
+          renderer.sprites.cheer(c.x, c.y)
           haptic.multiplier()
           tones.mastered()
           renderer.flash.fire(THEME.gold, 0.08)
@@ -359,6 +404,13 @@ function makePlayScene(r: RunConfig): Scene {
         }),
 
         w.events.on('death', ({ score, eaten }) => {
+          const head = w.snake[0]
+          if (head) {
+            renderer.sprites.panic(
+              head.x * CELL + CELL / 2,
+              head.y * CELL + CELL / 2,
+            )
+          }
           renderer.camera.addTrauma(JUICE.traumaOnDeath)
           renderer.flash.fire(THEME.shu, 0.3)
           haptic.death()
@@ -404,18 +456,11 @@ function makePlayScene(r: RunConfig): Scene {
       w.reset()
       loop.resync()
 
-      // A brand-new player has never steered before; say how, where they
-      // are already looking. One line, gone in seconds, never repeats.
-      if (Object.keys(data.stats).length === 0) {
-        renderer.fx.text(
-          BOARD.size / 2, BOARD.size * 0.68,
-          'drag anywhere to steer', THEME.washi, 4, 17,
-        )
-      }
     },
 
     exit() {
       for (const d of disposers) d()
+      tones.stopMusic()
       world = null
       hud.setGoal('')
       hud.setWord(null, 0)
@@ -764,11 +809,31 @@ function startRun(r: RunConfig): void {
   scenes.push(makeReadyScene())
 }
 
+/**
+ * Step two of onboarding: mark what you already read. Seeded characters go in
+ * one rung below mastery — a claim the schedule will make them confirm in a
+ * week — so a returning learner is never asked to prove ん on day one, but
+ * nothing is taken purely on trust either.
+ */
+function makePlaceScene(): Scene {
+  return {
+    name: 'place',
+    enter() {
+      placeView.open(buildTable(data.lang, data.setName), data.lang)
+    },
+    exit() {
+      placeView.close()
+    },
+  }
+}
+
 function makeMenuScene(message?: string): Scene {
   return {
     name: 'menu',
     enter() {
       menuView.show(data, message ?? menuResultLine())
+      const f = focusStats()
+      menuView.renderFocus(data, f.mastered, f.total, f.due)
     },
     exit() {
       menuView.hide()
@@ -788,6 +853,9 @@ function menuResultLine(): string {
 // ------------------------------------------------------------------- views --
 
 const menuView = new MenuView({
+  onContinue() {
+    continueRun()
+  },
   onLang(lang) {
     data.lang = lang
     data.setName = setNamesFor(lang)[0] ?? ''
@@ -832,9 +900,21 @@ const onboardView = new OnboardView((lang) => {
   speech.warmup() // we are inside the tap: the voice loads while level 1 opens
   syncVoices()
   save(data)
+  scenes.replaceAll(makePlaceScene())
+})
+
+const placeView = new PlaceView((known) => {
+  const now = Date.now()
+  for (const ch of known) {
+    const s = data.stats[ch] ?? { ok: 0, err: 0 }
+    seedKnown(s, now)
+    data.stats[ch] = s
+  }
+  data.focus = { lang: data.lang, setName: data.setName, startedAt: now }
+  save(data)
   const first = CAMPAIGNS[data.lang][0]
   if (first) startRun(levelRun(first, 0))
-  else scenes.replaceAll(makeMenuScene())
+  else startRun(endlessRun())
 })
 
 const campaignView = new CampaignView(
@@ -907,6 +987,13 @@ const chartView = new ChartView({
   onShowPad(show) {
     data.showPad = show
     applyPadSetting()
+    save(data)
+  },
+  onMusic(on) {
+    data.music = on
+    tones.musicOn = on
+    if (on) tones.startMusic()
+    else tones.stopMusic()
     save(data)
   },
 })
@@ -1178,6 +1265,7 @@ const loop = new GameLoop({
 
 initNativeChrome()
 applyPadSetting()
+tones.musicOn = data.music
 chartView.syncSettings(data)
 hud.setSealHidden(!data.showRomaji && !!speech.current)
 syncVoices()

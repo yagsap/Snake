@@ -52,8 +52,17 @@ const BOXES_MS = [
 /** Rung a character must survive to count as mastered — a multi-day gap. */
 const MASTERY_BOX = 3
 
-/** Promote after a correct answer: up a rung, next review pushed out. */
+/**
+ * Promote after a correct answer — but ONLY if the review was actually due.
+ *
+ * Without that guard the ladder could be climbed by repetition inside a
+ * single session: answer the same character four times in two minutes and it
+ * would claim the multi-day rung, which is precisely the cramming the
+ * schedule exists to prevent. An early correct answer is still welcome
+ * practice; it just earns no credit and does not move the next review.
+ */
 export function promote(s: CharStat, now: number): void {
+  if (!isDue(s, now)) return
   s.box = Math.min(BOXES_MS.length - 1, (s.box ?? -1) + 1)
   s.due = now + (BOXES_MS[s.box] as number)
 }

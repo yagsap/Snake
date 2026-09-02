@@ -167,6 +167,22 @@
   .lvl.locked{opacity:.4;cursor:default}
   .lvlEndName{font:500 13px var(--mono);color:var(--mist)}
   .over-card h2.gold{color:var(--gold)}
+  /* The bullseye card: goal, progress ring, what is due. */
+  .focus{display:flex;align-items:center;gap:14px;background:var(--indigo);border:1px solid var(--grid);border-radius:12px;padding:12px 14px}
+  .focus-ring{position:relative;width:66px;height:66px;flex:none;display:grid;place-items:center}
+  .focus-ring canvas{position:absolute;inset:0;width:66px;height:66px}
+  /* Above the ring canvas: an absolutely-positioned sibling paints over a
+     static one regardless of DOM order, which hid the figure entirely. */
+  .focus-ring span{position:relative;z-index:1;font:700 15px var(--disp);color:var(--jade)}
+  .focus-meta{min-width:0}
+  .focus-meta b{display:block;font:500 15px var(--mono);color:var(--washi);text-transform:capitalize}
+  .focus-meta i{display:block;font:400 11px var(--mono);color:var(--mist);font-style:normal;margin-top:2px}
+  .focus-meta i.due{color:var(--gold)}
+  .place-card{width:min(94vw,380px);max-height:82vh}
+  .place-grid{overflow:auto;margin:10px 0;grid-template-columns:repeat(5,1fr);gap:6px}
+  .place-grid .tile{padding:8px 2px 6px;cursor:pointer;opacity:.45;border-color:transparent}
+  .place-grid .tile.known{opacity:1;border-color:var(--jade)}
+  .place-grid .tile b{font-size:clamp(15px,5vw,24px)}
   .learnLine{min-height:16px;font-size:12px;color:var(--gold);line-height:1.5}
   .learnLine[hidden]{display:none}
   .onboardQ{margin:4px 0 2px;text-align:center;font:500 15px var(--mono);color:var(--washi)}
@@ -182,17 +198,41 @@
   <p class="hint">you can switch languages anytime</p>
 </div></div>
 
+<div class="ov" id="placeScr" hidden><div class="menu-card place-card">
+  <h2 class="campTitle">Which do you already know?</h2>
+  <p class="hint" style="margin:0">tap the ones you can already read — we'll skip them<br>not sure? leave it, you'll meet it early</p>
+  <div class="chart place-grid" id="placeGrid"></div>
+  <button class="primary" id="placeDone">Start learning</button>
+  <button class="ghost sm" id="placeSkip">I'm starting from scratch</button>
+</div></div>
+
 <div class="ov" id="menuScr" hidden><div class="menu-card">
   <h1>Alphabet Snake<span id="snakeWord">へび</span></h1>
-  <div class="chips" id="langGrid"></div>
-  <div class="pills" id="setRow"></div>
-  <div class="pills" id="modeRow"></div>
-  <div class="modeBlurb" id="modeBlurb"></div>
+
+  <!-- The bullseye: what this player is here for, and the one button that
+       acts on it. Everything else is demoted below the fold of attention. -->
+  <div class="focus" id="focusCard">
+    <div class="focus-ring"><canvas id="focusRing" width="132" height="132"></canvas><span id="focusPct">0%</span></div>
+    <div class="focus-meta">
+      <b id="focusName">hiragana</b>
+      <i id="focusStat">0 of 0 mastered</i>
+      <i id="focusDue" class="due"></i>
+    </div>
+  </div>
+  <button class="primary" id="continueBtn">Continue</button>
   <div class="result" id="resultLine"></div>
-  <button class="primary" id="campBtn">Levels</button>
-  <div style="display:flex;gap:8px">
-    <button class="ghost" id="playBtn" style="flex:1">Endless</button>
-    <button class="ghost" id="dailyBtn" style="flex:1">Daily run</button>
+
+  <button class="ghost sm" id="moreBtn">more ways to play ▾</button>
+  <div id="moreBox" hidden>
+    <div class="chips" id="langGrid"></div>
+    <div class="pills" id="setRow"></div>
+    <div class="pills" id="modeRow"></div>
+    <div class="modeBlurb" id="modeBlurb"></div>
+    <button class="ghost" id="campBtn">Levels</button>
+    <div style="display:flex;gap:8px">
+      <button class="ghost" id="playBtn" style="flex:1">Endless</button>
+      <button class="ghost" id="dailyBtn" style="flex:1">Daily run</button>
+    </div>
   </div>
   <button class="ghost" id="menuLearnBtn">Learn the characters</button>
   <p class="hint">drag anywhere to steer · eat the character you hear · wrong bites cost a segment<br>answer fast for bonus points · <kbd>space</kbd> replays the sound</p>
@@ -261,6 +301,7 @@
       <label><input type="checkbox" id="showSnd"> show the sound during play</label>
       <label><input type="checkbox" id="reduceMotion"> reduce motion (no shake or particles)</label>
       <label><input type="checkbox" id="showPad"> show arrow buttons</label>
+      <label><input type="checkbox" id="music"> background music</label>
     </div>
   </div>
 </div>
