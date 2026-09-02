@@ -133,7 +133,6 @@ function levelMode(level: LevelSpec): Mode {
     id: 'drift', // id is only used by endless persistence; harmless here
     label: level.title,
     blurb: '',
-    wrap: level.wrap,
     paceScale: level.paceScale,
     scoreScale: level.kind === 'gauntlet' ? 1.5 : 1,
   }

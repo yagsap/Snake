@@ -22,7 +22,6 @@ export function botTurn(w: World): void {
   const head = w.snake[0]
   if (!head) return
   const cells = BOARD.cells
-  const wrap = w.mode.wrap
   const target = w.items.find((i) => i.correct)
 
   const occupied = new Set<number>()
@@ -40,10 +39,8 @@ export function botTurn(w: World): void {
     const v = DIR_VECTORS[d]
     let nx = head.x + v.x
     let ny = head.y + v.y
-    if (wrap) {
-      nx = (nx + cells) % cells
-      ny = (ny + cells) % cells
-    } else if (nx < 0 || ny < 0 || nx >= cells || ny >= cells) continue
+    nx = (nx + cells) % cells
+    ny = (ny + cells) % cells
     if (occupied.has(ny * cells + nx)) continue
 
     let score = 0
@@ -52,10 +49,8 @@ export function botTurn(w: World): void {
     if (target) {
       let dx = Math.abs(target.x - nx)
       let dy = Math.abs(target.y - ny)
-      if (wrap) {
-        dx = Math.min(dx, cells - dx)
-        dy = Math.min(dy, cells - dy)
-      }
+      dx = Math.min(dx, cells - dx)
+      dy = Math.min(dy, cells - dy)
       score -= dx + dy
     }
     let freedom = 0
@@ -63,10 +58,8 @@ export function botTurn(w: World): void {
       const v2 = DIR_VECTORS[d2]
       let mx = nx + v2.x
       let my = ny + v2.y
-      if (wrap) {
-        mx = (mx + cells) % cells
-        my = (my + cells) % cells
-      } else if (mx < 0 || my < 0 || mx >= cells || my >= cells) continue
+      mx = (mx + cells) % cells
+      my = (my + cells) % cells
       if (!occupied.has(my * cells + mx)) freedom++
     }
     if (freedom === 0) score -= 1000

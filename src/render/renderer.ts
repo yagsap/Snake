@@ -6,7 +6,7 @@ import { clamp01, countdown, easeOutBack, easeOutCubic, lerp } from '../core/tim
 import { speedBonusFactor } from '../game/progression'
 import { Camera } from './camera'
 import { Flash, FxSystem } from './fx'
-import { createBackground, drawWalls } from './background'
+import { createBackground } from './background'
 import { Sprites } from './sprites'
 import { clearMetricsCache, glyph } from './glyph'
 
@@ -258,7 +258,6 @@ export class Renderer {
 
     // Ripples first: water is under everything that floats on it.
     this.wake.draw(ctx)
-    if (!world.mode.wrap) drawWalls(ctx, this.dangerNear(world))
     this.drawObstacles(world)
     this.drawItems(world)
     this.sprites.draw(ctx)
@@ -280,19 +279,6 @@ export class Renderer {
       ctx.font = `700 42px ${FONTS.display}`
       ctx.fillText('paused', W / 2, W / 2)
     }
-  }
-
-  /** 0..1 — how close the head is to a lethal edge, for the wall glow. */
-  private dangerNear(world: World): number {
-    const head = world.snake[0]
-    if (!head) return 0
-    const d = Math.min(
-      head.x,
-      head.y,
-      BOARD.cells - 1 - head.x,
-      BOARD.cells - 1 - head.y,
-    )
-    return clamp01(1 - d / 3)
   }
 
   /** Stones: lethal cells drawn as dark rocks so the rule is visible. */
@@ -514,7 +500,7 @@ export class Renderer {
 
   private drawSnake(world: World, alpha: number): void {
     const ctx = this.ctx
-    const { snake, prevSnake, mode } = world
+    const { snake, prevSnake } = world
     const len = snake.length
     if (!len) return
 
@@ -555,16 +541,14 @@ export class Renderer {
       }
       let ox = p.x
       let oy = p.y
-      if (mode.wrap) {
-        if (s.x - ox > BOARD.cells / 2) ox += BOARD.cells
-        else if (ox - s.x > BOARD.cells / 2) ox -= BOARD.cells
-        if (s.y - oy > BOARD.cells / 2) oy += BOARD.cells
-        else if (oy - s.y > BOARD.cells / 2) oy -= BOARD.cells
-      }
+      if (s.x - ox > BOARD.cells / 2) ox += BOARD.cells
+      else if (ox - s.x > BOARD.cells / 2) ox -= BOARD.cells
+      if (s.y - oy > BOARD.cells / 2) oy += BOARD.cells
+      else if (oy - s.y > BOARD.cells / 2) oy -= BOARD.cells
       const x = lerp(ox, s.x, alpha) * CELL + CELL / 2
       const y = lerp(oy, s.y, alpha) * CELL + CELL / 2
-      out.x = mode.wrap ? wrapPx(x) : x
-      out.y = mode.wrap ? wrapPx(y) : y
+      out.x = wrapPx(x)
+      out.y = wrapPx(y)
     }
 
     // Nearest wrapped copy of coordinate `b`, as seen from `a`.
@@ -633,12 +617,12 @@ export class Renderer {
         ctx.stroke()
       }
       one(0, 0)
-      if (mode.wrap) {
-        // The SAME one-cell band fillMirrors uses for the head and the
-        // carried glyphs. Mirroring only once a segment had crossed the edge
-        // meant a mirrored head could appear with no body and no shadow
-        // beneath it for up to half a move. Copies that land off-canvas are
-        // clipped and cost nothing.
+      // The SAME one-cell band fillMirrors uses for the head and the carried
+      // glyphs. Mirroring only once a segment had crossed the edge meant a
+      // mirrored head could appear with no body and no shadow beneath it for
+      // up to half a move. Copies that land off-canvas are clipped and cost
+      // nothing.
+      {
         const sx =
           Math.min(x1, cx, x2) < CELL ? W : Math.max(x1, cx, x2) > W - CELL ? -W : 0
         const sy =
@@ -668,12 +652,12 @@ export class Renderer {
         ctx.quadraticCurveTo(cx + dx, cy + dy, x2 + dx, y2 + dy)
       }
       one(0, 0)
-      if (mode.wrap) {
-        // The SAME one-cell band fillMirrors uses for the head and the
-        // carried glyphs. Mirroring only once a segment had crossed the edge
-        // meant a mirrored head could appear with no body and no shadow
-        // beneath it for up to half a move. Copies that land off-canvas are
-        // clipped and cost nothing.
+      // The SAME one-cell band fillMirrors uses for the head and the carried
+      // glyphs. Mirroring only once a segment had crossed the edge meant a
+      // mirrored head could appear with no body and no shadow beneath it for
+      // up to half a move. Copies that land off-canvas are clipped and cost
+      // nothing.
+      {
         const sx =
           Math.min(x1, cx, x2) < CELL ? W : Math.max(x1, cx, x2) > W - CELL ? -W : 0
         const sy =
@@ -696,7 +680,6 @@ export class Renderer {
       mbuf[0] = x
       mbuf[1] = y
       let n = 2
-      if (!mode.wrap) return n
       if (x < CELL) { mbuf[n++] = x + W; mbuf[n++] = y }
       if (x > W - CELL) { mbuf[n++] = x - W; mbuf[n++] = y }
       if (y < CELL) { mbuf[n++] = x; mbuf[n++] = y + W }

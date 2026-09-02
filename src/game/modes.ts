@@ -1,22 +1,24 @@
 /**
  * Game modes.
  *
- * The prototype had exactly one rule set: walls always wrap. Wrapping is
- * forgiving — there is no such thing as a fatal edge, so the only pressure is
- * your own tail, and the board's border is decoration. Making the edge lethal
- * changes the shape of every decision on the board without changing a single
- * line of the learning mechanic, which is the cheapest real difficulty axis
- * available and the reason classic Snake ships both.
+ * The board always wraps. Lethal edges were once a third mode and the rule on
+ * every boss level, and they were removed: they are a difficulty axis that has
+ * nothing to do with reading a character. Dying to the border punishes a
+ * steering slip, and it did so hardest on exactly the levels built from the
+ * shapes a learner most often confuses — so the levels that most needed
+ * attention on the glyphs were the ones spending it on the wall instead.
+ *
+ * What is left is the axis that IS the game: pace. `gale` ramps the speed
+ * twice as fast, which shortens the time you have to recognise a character
+ * without adding a second way to lose.
  */
-export type ModeId = 'drift' | 'ink' | 'gale'
+export type ModeId = 'drift' | 'gale'
 
 export interface Mode {
   readonly id: ModeId
   readonly label: string
   /** One line shown under the mode picker. */
   readonly blurb: string
-  /** Do the edges wrap, or kill? */
-  readonly wrap: boolean
   /** Multiplier on the pace ramp. >1 tightens the interval faster. */
   readonly paceScale: number
   /** Multiplier on points earned, to pay for the added risk. */
@@ -27,26 +29,16 @@ export const MODES: Readonly<Record<ModeId, Mode>> = {
   drift: {
     id: 'drift',
     label: 'drift',
-    blurb: 'edges wrap · learn without dying',
-    wrap: true,
+    blurb: 'the steady pace · learn without dying',
     paceScale: 1,
     scoreScale: 1,
-  },
-  ink: {
-    id: 'ink',
-    label: 'ink',
-    blurb: 'edges are walls · classic snake',
-    wrap: false,
-    paceScale: 1,
-    scoreScale: 1.5,
   },
   gale: {
     id: 'gale',
     label: 'gale',
-    blurb: 'walls · speeds up twice as fast',
-    wrap: false,
+    blurb: 'speeds up twice as fast',
     paceScale: 2,
-    scoreScale: 2.5,
+    scoreScale: 2,
   },
 }
 

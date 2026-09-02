@@ -50,7 +50,6 @@ export interface LevelSpec {
   chars: string
   words?: readonly WordEntry[]
   goal: LevelGoal
-  wrap: boolean
   paceScale: number
   /** Optional obstacle layout, by name. */
   layout?: LayoutName
@@ -151,20 +150,20 @@ const G = (count: number, maxMisses: number): LevelGoal => ({ count, maxMisses }
 /** Terse level builder; ids are assigned per-language below and stay stable. */
 interface Draft extends Omit<LevelSpec, 'id'> {}
 const chapter = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
-  title, kind: 'chapter', chars, goal: G(12, 3), wrap: true, paceScale: 0.8, ...opts,
+  title, kind: 'chapter', chars, goal: G(12, 3), paceScale: 0.8, ...opts,
 })
 const gauntlet = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
-  title, kind: 'gauntlet', chars, goal: G(10, 2), wrap: false, paceScale: 1.2, ...opts,
+  title, kind: 'gauntlet', chars, goal: G(10, 2), paceScale: 1.2, ...opts,
 })
 const words = (title: string, list: readonly WordEntry[], opts: Partial<Draft> = {}): Draft => ({
   title, kind: 'words', chars: [...new Set(list.flatMap((e) => [...e.w]))].join(''),
-  words: list, goal: G(5, 3), wrap: true, paceScale: 0.9, ...opts,
+  words: list, goal: G(5, 3), paceScale: 0.9, ...opts,
 })
 const reverse = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
-  title, kind: 'reverse', chars, goal: G(12, 3), wrap: true, paceScale: 0.75, ...opts,
+  title, kind: 'reverse', chars, goal: G(12, 3), paceScale: 0.75, ...opts,
 })
 const ear = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
-  title, kind: 'ear', chars, goal: G(12, 4), wrap: true, paceScale: 0.85, ...opts,
+  title, kind: 'ear', chars, goal: G(12, 4), paceScale: 0.85, ...opts,
 })
 
 const JA: Draft[] = [
@@ -195,13 +194,13 @@ const JA: Draft[] = [
     { w: 'とり', gloss: 'bird' }, { w: 'うみ', gloss: 'sea' },
     { w: 'もり', gloss: 'forest' }, { w: 'むし', gloss: 'insect' },
   ]),
-  ear('the full syllabary', 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん', { goal: G(15, 4), wrap: false }),
+  ear('the full syllabary', 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん', { goal: G(15, 4) }),
   gauntlet('every lookalike', 'るろれわねめぬあおさきちはほま', { goal: G(15, 2), paceScale: 1.3, layout: 'box' }),
   words('the menagerie', [
     { w: 'かめ', gloss: 'turtle' }, { w: 'さる', gloss: 'monkey' },
     { w: 'とら', gloss: 'tiger' }, { w: 'りす', gloss: 'squirrel' },
     { w: 'くま', gloss: 'bear' }, { w: 'うし', gloss: 'cow' },
-  ], { goal: G(6, 3), wrap: false }),
+  ], { goal: G(6, 3) }),
   // The dakuten arc: each voiced row is taught against its unvoiced base,
   // because the base IS the confusion — the only difference is the dots.
   chapter('two little dots', 'がぎぐげごかきくけこ'),
@@ -233,13 +232,13 @@ const JA: Draft[] = [
     { w: 'テレビ', gloss: 'TV' }, { w: 'パンダ', gloss: 'panda' },
     { w: 'バス', gloss: 'bus' }, { w: 'ペン', gloss: 'pen' },
   ]),
-  ear('by ear: katakana', 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン', { goal: G(15, 4), wrap: false }),
+  ear('by ear: katakana', 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン', { goal: G(15, 4) }),
   gauntlet('the final exam', 'シツソンクケタワウフヌスコユチテルレ', { goal: G(15, 2), paceScale: 1.3, layout: 'box' }),
   words('menagerie II', [
     { w: 'コアラ', gloss: 'koala' }, { w: 'ゴリラ', gloss: 'gorilla' },
     { w: 'ライオン', gloss: 'lion' }, { w: 'クジラ', gloss: 'whale' },
     { w: 'ラクダ', gloss: 'camel' }, { w: 'キリン', gloss: 'giraffe' },
-  ], { goal: G(6, 3), wrap: false }),
+  ], { goal: G(6, 3) }),
 ]
 
 const ZH: Draft[] = [
@@ -264,7 +263,7 @@ const ZH: Draft[] = [
     { w: '中国', gloss: 'China' }, { w: '国王', gloss: 'king' },
     { w: '女王', gloss: 'queen' }, { w: '白天', gloss: 'daytime' },
     { w: '木马', gloss: 'wooden horse' }, { w: '上山', gloss: 'climb the hill' },
-  ], { wrap: false }),
+  ], { }),
 ]
 
 const RU: Draft[] = [
@@ -286,7 +285,7 @@ const RU: Draft[] = [
     { w: 'МИР', gloss: 'peace / world' }, { w: 'ЛЕС', gloss: 'forest' },
     { w: 'НОС', gloss: 'nose' }, { w: 'РОТ', gloss: 'mouth' },
     { w: 'СТОЛ', gloss: 'table' }, { w: 'ХЛЕБ', gloss: 'bread' },
-  ], { wrap: false }),
+  ], { }),
 ]
 
 const HI: Draft[] = [
@@ -311,7 +310,7 @@ const HI: Draft[] = [
     { w: 'नमक', gloss: 'salt' }, { w: 'महल', gloss: 'palace' },
     { w: 'पवन', gloss: 'breeze' }, { w: 'रथ', gloss: 'chariot' },
     { w: 'वजन', gloss: 'weight' }, { w: 'शहद', gloss: 'honey' },
-  ], { wrap: false }),
+  ], { }),
 ]
 
 const EN: Draft[] = [
@@ -376,7 +375,7 @@ const KO: Draft[] = [
     { w: '하루', gloss: 'a day' }, { w: '부모', gloss: 'parents' },
     { w: '우주', gloss: 'universe' }, { w: '기타', gloss: 'guitar' },
     { w: '도시', gloss: 'city' }, { w: '가수', gloss: 'singer' },
-  ], { wrap: false }),
+  ], { }),
   ear('by ear: syllables', '가나다라마바사아자차카타파하고노도로모보', { goal: G(15, 4) }),
 ]
 

@@ -274,24 +274,26 @@ export class World {
     }
   }
 
-  /** Where `dir` leads from the head, wrap applied. null = off the board. */
+  /** Where `dir` leads from the head, wrap applied. Never null: edges wrap. */
   private destOf(dir: Dir): { x: number; y: number } | null {
     const head = this.snake[0]
     if (!head) return null
     const v = DIR_VECTORS[dir]
     let nx = head.x + v.x
     let ny = head.y + v.y
-    if (this.mode.wrap) {
-      nx = (nx + BOARD.cells) % BOARD.cells
-      ny = (ny + BOARD.cells) % BOARD.cells
-    } else if (nx < 0 || ny < 0 || nx >= BOARD.cells || ny >= BOARD.cells) {
-      return null
-    }
+    // The board always wraps. Deadly edges were a second failure mode layered
+    // on top of the one the game is actually about — misreading a character —
+    // and they punished a steering slip, which teaches nothing about kana.
+    nx = (nx + BOARD.cells) % BOARD.cells
+    ny = (ny + BOARD.cells) % BOARD.cells
     return { x: nx, y: ny }
   }
 
   /** Why moving to `dest` would kill, or null when the move is safe. */
   private fatalAt(dest: { x: number; y: number } | null): DeathReason | null {
+    // `destOf` no longer returns null — the board wraps — but the guard stays
+    // so a future rule that CAN run off the board fails closed rather than
+    // silently teleporting the head to (0,0).
     if (!dest) return 'wall'
     if (this.obstacles.has(idx(dest.x, dest.y))) return 'wall'
 
@@ -545,12 +547,8 @@ export class World {
         if (Math.abs(dx) + Math.abs(dy) > 2) continue
         let x = head.x + dx
         let y = head.y + dy
-        if (this.mode.wrap) {
-          x = (x + BOARD.cells) % BOARD.cells
-          y = (y + BOARD.cells) % BOARD.cells
-        } else if (x < 0 || y < 0 || x >= BOARD.cells || y >= BOARD.cells) {
-          continue
-        }
+        x = (x + BOARD.cells) % BOARD.cells
+        y = (y + BOARD.cells) % BOARD.cells
         danger.add(idx(x, y))
       }
     }

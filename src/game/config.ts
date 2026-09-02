@@ -30,8 +30,8 @@ export const SNAKE = {
   minLength: 2,
   /**
    * Seconds a fatal move is held open for a saving turn to arrive. At the
-   * pace floor a wall death is routinely input that landed one frame late —
-   * the player DID react. The window is shorter than human perception of a
+   * pace floor a death is routinely input that landed one frame late — the
+   * player DID react. The window is shorter than human perception of a
    * pause but longer than one frame of input latency, so the forgiveness is
    * felt as fairness, never seen as slack.
    */
