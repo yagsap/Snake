@@ -8,93 +8,10 @@ import { Camera } from './camera'
 import { Flash, FxSystem } from './fx'
 import { createBackground, drawWalls } from './background'
 import { Sprites } from './sprites'
+import { clearMetricsCache, glyph } from './glyph'
 
 const W = BOARD.size
 const TWO_PI = Math.PI * 2
-
-/**
- * Glyph metrics cache.
- *
- * `measureText` is not free, and the draw loop measures every tile and every
- * body segment, every frame, at a size that changes continuously during entry
- * animations. Font metrics scale linearly with size, so measuring each
- * character once at a reference size and scaling the result is exact for
- * scalable fonts and removes the per-frame cost entirely.
- */
-const REF_SIZE = 100
-const metricsCache = new Map<string, { width: number; asc: number; desc: number }>()
-
-function metricsFor(
-  ctx: CanvasRenderingContext2D,
-  ch: string,
-): { width: number; asc: number; desc: number } {
-  const cached = metricsCache.get(ch)
-  if (cached) return cached
-  ctx.save()
-  ctx.font = `700 ${REF_SIZE}px ${FONTS.glyph}`
-  ctx.textBaseline = 'alphabetic'
-  const m = ctx.measureText(ch)
-  const entry = {
-    width: m.width / REF_SIZE,
-    asc: (m.actualBoundingBoxAscent || REF_SIZE * 0.7) / REF_SIZE,
-    desc: (m.actualBoundingBoxDescent || REF_SIZE * 0.1) / REF_SIZE,
-  }
-  ctx.restore()
-  metricsCache.set(ch, entry)
-  return entry
-}
-
-/**
- * Draw a character optically centred in a box, shrinking to fit.
- *
- * Canvas `textBaseline: 'middle'` centres on the font's line box, not on the
- * ink. For CJK and Devanagari the two are noticeably different, and glyphs
- * drift off-centre inside their tiles. Measuring the actual ink bounds and
- * offsetting from the alphabetic baseline centres what the eye actually sees.
- */
-function glyph(
-  ctx: CanvasRenderingContext2D,
-  ch: string,
-  x: number,
-  y: number,
-  size: number,
-  maxWidth?: number,
-  maxHeight?: number,
-): void {
-  const m = metricsFor(ctx, ch)
-  let s = size
-  if (maxWidth && m.width * s > maxWidth) s = maxWidth / m.width
-  // Clamp the ink HEIGHT too. Devanagari ascenders and descenders run well
-  // past the em box — width-only fitting let them spill out of every
-  // container we ever drew. Both clamps together make containment a
-  // guarantee of this function, not a hope about the font.
-  const inkH = m.asc + m.desc
-  if (maxHeight && inkH * s > maxHeight) s = maxHeight / inkH
-  if (s < 1) return
-  ctx.textBaseline = 'alphabetic'
-  ctx.font = glyphFont(s)
-  ctx.fillText(ch, x, y + ((m.asc - m.desc) * s) / 2)
-  ctx.textBaseline = 'middle'
-}
-
-/**
- * Font shorthand strings, cached by half-pixel size.
- *
- * Assigning ctx.font builds a string AND makes the engine re-parse the
- * shorthand, and this ran for every glyph on the board and every character
- * riding the snake, every frame. Quantising to half a pixel is invisible and
- * turns thousands of fresh strings a second into a handful of reused ones.
- */
-const fontCache = new Map<number, string>()
-function glyphFont(size: number): string {
-  const key = Math.round(size * 2) / 2
-  let f = fontCache.get(key)
-  if (f === undefined) {
-    f = `700 ${key}px ${FONTS.glyph}`
-    fontCache.set(key, f)
-  }
-  return f
-}
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
@@ -203,7 +120,7 @@ export class Renderer {
     }
     // Metrics measured before the webfonts arrive describe the fallback font.
     // Flush the cache when loading settles so glyphs re-centre correctly.
-    document.fonts?.addEventListener('loadingdone', () => metricsCache.clear())
+    document.fonts?.addEventListener('loadingdone', () => clearMetricsCache())
   }
 
   /**
@@ -353,36 +270,68 @@ export class Renderer {
 
   private drawItems(world: World): void {
     const ctx = this.ctx
+    const t = this.clock
     for (const it of world.items) {
-      // Entry animation: overshoot then settle. A tile that simply appears is
-      // easy to miss; one that pops draws the eye to the new question.
-      const grow = clamp01(it.age / 0.26)
-      const scale = easeOutBack(grow)
-      const bob = Math.sin(this.clock * 1.9 + it.phase) * 1.6
+      /**
+       * The characters FLOAT. The board is water — a seigaiha wave field that
+       * ripples where the snake passes and plunks where a tile lands — so a
+       * character sitting perfectly still on it reads as a sticker on a
+       * photograph. Four motions, each on its own frequency and offset by the
+       * item's own phase, so no two tiles ever sync into a pulse:
+       *   bob    rises and falls, the obvious one
+       *   sway   drifts side to side, so the bob is not a piston
+       *   tilt   rocks a few degrees, which is what sells "afloat"
+       *   breath scales a hair, so even a becalmed tile is alive
+       *
+       * Every tile gets IDENTICAL treatment. Animating the correct one even
+       * slightly differently would answer the question before the player read
+       * it — the same reason the bonus ring had to move off the target.
+       */
+      const bob = Math.sin(t * 1.7 + it.phase) * 3.4
+      const sway = Math.cos(t * 1.13 + it.phase * 1.7) * 2.4
+      const tilt = Math.sin(t * 0.87 + it.phase * 2.3) * 0.075
+      const breath = 1 + Math.sin(t * 2.3 + it.phase * 0.7) * 0.04
+
+      /**
+       * Entry: the tile drops in and rights itself. easeOutBack overshoots the
+       * scale, an extra fall lets it settle onto the water rather than
+       * appearing on it, and the spin unwinds so it lands level. A tile that
+       * simply appears is easy to miss; one that arrives draws the eye to the
+       * new question.
+       */
+      const grow = clamp01(it.age / 0.42)
+      const scale = easeOutBack(grow) * breath
+      const settling = 1 - easeOutCubic(grow)
+      const drop = settling * -CELL * 0.55
+      const spin = settling * 0.6
+
       // Pull edge-cell glyphs a few pixels inboard: a glyph centred in a
       // boundary cell has its ink flush against the canvas edge, where the
-      // bob, the shadow, or a font's optimistic metrics get it cropped.
-      // Interior cells are untouched — the clamp only bites on the rim.
+      // float, the shadow, or a font's optimistic metrics get it cropped.
       const margin = CELL / 2 + 3
       const x = Math.min(W - margin, Math.max(margin, it.x * CELL + CELL / 2))
-      const y = Math.min(W - margin, Math.max(margin, it.y * CELL + CELL / 2 + bob))
+      const y = Math.min(W - margin, Math.max(margin, it.y * CELL + CELL / 2))
 
       // No card behind the character: a box can be overflowed by a tall
       // script (Devanagari ascenders escaped it on every phone font tried),
-      // but a bare glyph has nothing to escape. Dropping the card also bought
-      // room for much bigger ink.
-      //
-      // The lift off the wave field is a hand-drawn drop copy rather than
-      // ctx.shadowBlur. A blurred shadow is one of the most expensive things
-      // a 2-D canvas can do and this runs for every tile on every frame; two
-      // fillText calls cost a fraction of one blur.
+      // but a bare glyph has nothing to escape. The lift off the wave field
+      // is a hand-drawn drop copy rather than ctx.shadowBlur, which is one of
+      // the most expensive things a 2-D canvas can do.
       const text = world.reverse ? world.soundOf(it.ch) : it.ch
       // Reverse level: tiles show the SOUND; the cue shows the glyph.
       const size = (world.reverse ? CELL * 0.46 : CELL * 0.88) * scale
+
+      ctx.save()
+      ctx.translate(x + sway, y + bob + drop)
+      ctx.rotate(tilt + spin)
+      // The shadow drifts FURTHER than the glyph as it rises: parallax is
+      // what turns a bob into height above the water rather than a wobble.
+      const lift = 1 + (bob + drop) * -0.06
       ctx.fillStyle = 'rgba(0,0,0,.5)'
-      glyph(ctx, text, x + 1, y + 2, size, CELL, CELL)
+      glyph(ctx, text, 1.5 * lift, 2.5 * lift, size, CELL, CELL)
       ctx.fillStyle = THEME.washi
-      glyph(ctx, text, x, y, size, CELL, CELL)
+      glyph(ctx, text, 0, 0, size, CELL, CELL)
+      ctx.restore()
     }
   }
 

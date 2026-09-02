@@ -1,5 +1,6 @@
 import { CELL, FONTS, JUICE } from '../game/config'
 import { clamp01, easeOutCubic, easeOutQuint } from '../core/time'
+import { glyph } from './glyph'
 
 /**
  * Transient visual effects.
@@ -45,7 +46,18 @@ interface Particle extends Base {
   rotation: number
 }
 
-type Effect = Ring | Text | Particle
+/** A character flung off the board — the eaten tile, going somewhere. */
+interface Glyph extends Base {
+  kind: 'glyph'
+  ch: string
+  color: string
+  size: number
+  vx: number
+  vy: number
+  spin: number
+}
+
+type Effect = Ring | Text | Particle | Glyph
 
 /** Gravity for debris, in render units per second squared. */
 const GRAVITY = 900
@@ -137,6 +149,39 @@ export class FxSystem {
     }
   }
 
+  /**
+   * The eaten character, thrown clear.
+   *
+   * A tile that simply vanishes the instant it is bitten gives the eye
+   * nothing to follow, and the moment the player just earned is the one
+   * moment worth watching. This sends the actual character tumbling away in
+   * the direction of travel, growing and fading — so the reward is the
+   * glyph itself, not a generic puff.
+   */
+  glyphPop(
+    x: number,
+    y: number,
+    ch: string,
+    color: string,
+    size: number,
+    dirX = 0,
+    dirY = 0,
+  ): void {
+    this.effects.push({
+      kind: 'glyph',
+      x,
+      y,
+      age: 0,
+      life: 0.55,
+      ch,
+      color,
+      size,
+      vx: dirX * 120 + (Math.random() - 0.5) * 70,
+      vy: dirY * 120 - 90 + (Math.random() - 0.5) * 70,
+      spin: (Math.random() - 0.5) * 6,
+    })
+  }
+
   update(dt: number): void {
     for (let i = this.effects.length - 1; i >= 0; i--) {
       const e = this.effects[i] as Effect
@@ -147,6 +192,12 @@ export class FxSystem {
         const last = this.effects.pop() as Effect
         if (i < this.effects.length) this.effects[i] = last
         continue
+      }
+      if (e.kind === 'glyph') {
+        e.x += e.vx * dt
+        e.y += e.vy * dt
+        e.vy += GRAVITY * 0.35 * dt
+        e.vx *= Math.exp(-dt / DRAG_TAU)
       }
       if (e.kind === 'particle') {
         const drag = Math.exp(-dt / DRAG_TAU)
@@ -183,6 +234,19 @@ export class FxSystem {
           ctx.fillStyle = e.color
           ctx.font = `600 ${e.size}px ${FONTS.mono}`
           ctx.fillText(e.text, e.x, e.y - easeOutCubic(t) * e.rise)
+          break
+        }
+        case 'glyph': {
+          // Grows as it goes: the character is being celebrated, not
+          // discarded, so it reads as leaping off the board rather than
+          // falling off it.
+          ctx.save()
+          ctx.globalAlpha = 1 - t * t
+          ctx.translate(e.x, e.y)
+          ctx.rotate(e.spin * t)
+          ctx.fillStyle = e.color
+          glyph(ctx, e.ch, 0, 0, e.size * (1 + easeOutCubic(t) * 0.7))
+          ctx.restore()
           break
         }
         case 'particle': {

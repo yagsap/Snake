@@ -351,6 +351,13 @@ function makePlayScene(r: RunConfig): Scene {
           renderer.popEat()
           renderer.camera.addTrauma(JUICE.traumaOnEat)
           const v = DIR_VECTORS[w.input.current]
+          // The eaten character itself is thrown clear — the reward is the
+          // glyph, so the glyph is what the eye gets to follow.
+          renderer.fx.glyphPop(
+            c.x, c.y,
+            run?.reverse ? w.soundOf(item.ch) || item.ch : item.ch,
+            THEME.washi, CELL * 0.7, v.x, v.y,
+          )
           renderer.fx.ring(c.x, c.y, THEME.jade, JUICE.ringLife)
           renderer.fx.burst(c.x, c.y, THEME.jadeBright, 10, 240, v.x, v.y)
           renderer.fx.text(c.x, c.y, `+${award.points}`, THEME.jadeBright)
@@ -383,6 +390,9 @@ function makePlayScene(r: RunConfig): Scene {
           haptic.wrong()
           tones.wrong()
           const v = DIR_VECTORS[w.input.current]
+          renderer.fx.glyphPop(
+            c.x, c.y, item.ch, THEME.shuSoft, CELL * 0.62, -v.x, -v.y,
+          )
           renderer.fx.ring(c.x, c.y, THEME.shu, JUICE.wrongRingLife)
           renderer.fx.burst(c.x, c.y, THEME.shuSoft, 8, 200, v.x, v.y)
           // The teaching moment: what you bit, and what was wanted.
