@@ -904,11 +904,24 @@ function makeReadyScene(): Scene {
     drawsBelow: true,
     enter() {
       firstEver = Object.keys(data.stats).length === 0
-      // The one-line tutorial, shown only before anyone's very first bite.
+      /**
+       * The one-line tutorial, shown only before anyone's very first bite —
+       * and it has to match the cue this level actually gives. A counting
+       * level says nothing at all and a blending level says a whole word, so
+       * "eat the character you hear" was, on those, simply untrue: the first
+       * sentence the game ever says to a child, describing a sense it is not
+       * using.
+       */
       if (firstEver) {
+        const line = run?.counting
+          ? 'count the dots, then eat that number'
+          : run?.blending
+            ? 'listen to the word, then eat its letters in order'
+            : run?.reverse
+              ? 'eat the sound that matches the character'
+              : 'eat the character you hear'
         renderer.fx.text(
-          BOARD.size / 2, CELL * 2,
-          'eat the character you hear', THEME.gold,
+          BOARD.size / 2, CELL * 2, line, THEME.gold,
           JUICE.readySeconds + 1, 18,
         )
       }
