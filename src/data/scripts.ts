@@ -35,6 +35,31 @@ export const CYRILLIC = table(
 )
 
 /** English letters, cued by their names — the game teaches the alphabet. */
+/**
+ * Phonics: the sound each letter MAKES, taught through a keyword.
+ *
+ * Letter names and letter sounds are different skills, and for a child
+ * learning to read the sound is the one that matters — "bee" does not help
+ * you decode "bat". So the cue for these levels speaks a whole word and the
+ * child eats the letter it starts with, which is how phonics is actually
+ * taught: a real word is something a speech engine pronounces correctly,
+ * where an isolated sound comes out as "buh" and teaches a schwa that is not
+ * there.
+ *
+ * Every keyword uses the letter's SHORT/hard sound, which is the one taught
+ * first — cat, not city; goat, not giant. X is the exception every phonics
+ * scheme makes: it is cued by the sound at the END of "box", because English
+ * has no common word starting with it.
+ *
+ * Deliberately NOT registered as a set in LANGUAGES. `tableFromChars` merges
+ * every set of a language with last-one-wins, so a phonics set keyed by the
+ * same letters would quietly rewrite A from "ay" to "apple" for every English
+ * level in the game. Phonics levels carry this table explicitly instead.
+ */
+export const PHONICS_EN = table(
+  'Aapple Bball Ccat Ddog Eegg Ffish Ggoat Hhat Iinsect Jjam Kkite Lleaf Mmoon Nnest Ooctopus Ppig Qqueen Rrain Ssun Ttree Uumbrella Vvan Wweb Xbox Yyellow Zzip',
+)
+
 export const LATIN_UPPER = table(
   'Aay Bbee Csee Ddee Eee Fef Gjee Haitch Ieye Jjay Kkay Lel Mem Nen Ooh Ppee Qcue Rar Ses Ttee Uyou Vvee Wdouble-u Xex Ywhy Zzee',
 )

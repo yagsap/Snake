@@ -1,6 +1,6 @@
 import { BOARD } from './config'
 import type { LangId } from '../data/scripts'
-import { LANGUAGES } from '../data/scripts'
+import { LANGUAGES, PHONICS_EN } from '../data/scripts'
 import type { CharTable } from '../data/scripts'
 
 /**
@@ -33,7 +33,13 @@ export interface WordEntry {
   gloss: string
 }
 
-export type LevelKind = 'chapter' | 'gauntlet' | 'words' | 'reverse' | 'ear'
+export type LevelKind =
+  | 'chapter'
+  | 'gauntlet'
+  | 'words'
+  | 'reverse'
+  | 'ear'
+  | 'phonics'
 
 export interface LevelGoal {
   /** Correct eats (or completed words, in a words level) needed to clear. */
@@ -48,6 +54,13 @@ export interface LevelSpec {
   kind: LevelKind
   /** Characters in play — a subset of the language's tables. */
   chars: string
+  /**
+   * An explicit table, overriding the merge of the language's sets. Phonics
+   * needs this: it maps the same letters to different cues ("apple", not
+   * "ay"), and the merge is last-one-wins, so registering it as a set would
+   * rewrite those letters for every other level too.
+   */
+  table?: CharTable
   words?: readonly WordEntry[]
   goal: LevelGoal
   paceScale: number
@@ -61,6 +74,7 @@ export const KIND_LABEL: Record<LevelKind, string> = {
   words: 'words',
   reverse: 'recall',
   ear: 'listen',
+  phonics: 'sounds',
 }
 
 // ---------------------------------------------------------------- layouts --
@@ -158,6 +172,13 @@ const gauntlet = (title: string, chars: string, opts: Partial<Draft> = {}): Draf
 const words = (title: string, list: readonly WordEntry[], opts: Partial<Draft> = {}): Draft => ({
   title, kind: 'words', chars: [...new Set(list.flatMap((e) => [...e.w]))].join(''),
   words: list, goal: G(5, 3), paceScale: 0.9, ...opts,
+})
+const phonics = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
+  title, kind: 'phonics', chars,
+  table: Object.fromEntries(
+    [...chars].map((c) => [c, PHONICS_EN[c] as string]),
+  ),
+  goal: G(10, 3), paceScale: 0.7, ...opts,
 })
 const reverse = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
   title, kind: 'reverse', chars, goal: G(12, 3), paceScale: 0.75, ...opts,
@@ -327,11 +348,13 @@ const HI: Draft[] = [
 
 const EN: Draft[] = [
   chapter('A to E', 'ABCDE', { goal: G(10, 3), paceScale: 0.7 }),
+  phonics('sounds: A to E', 'ABCDE'),
   chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
   chapter('F to J', 'FGHIJABCDE'),
   gauntlet('the bee family', 'BCDEGPTVZ', { goal: G(12, 2) }),
   chapter('K to O', 'KLMNOFGHIJ', { layout: 'garden' }),
+  phonics('sounds: F to O', 'FGHIJKLMNO'),
   words('first words', [
     { w: 'CAT', gloss: 'cat' }, { w: 'DOG', gloss: 'dog' },
     { w: 'BED', gloss: 'bed' }, { w: 'FIG', gloss: 'fig' },
@@ -340,6 +363,7 @@ const EN: Draft[] = [
   chapter('P to T', 'PQRSTKLMNO'),
   gauntlet('mirror shapes', 'OQPRBDUV'),
   chapter('U to Z', 'UVWXYZPQRST', { layout: 'torii' }),
+  phonics('sounds: P to Z', 'PQRSTUVWXYZ'),
   words('animals', [
     { w: 'FOX', gloss: 'fox' }, { w: 'OWL', gloss: 'owl' },
     { w: 'PIG', gloss: 'pig' }, { w: 'COW', gloss: 'cow' },

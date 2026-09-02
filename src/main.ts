@@ -93,6 +93,8 @@ interface RunConfig {
   reverse: boolean
   /** Voice-only cue: never show the romanization in the seal. */
   earOnly: boolean
+  /** Cue is a spoken keyword and the answer is its first letter. */
+  phonics: boolean
   obstacles: ReadonlySet<number> | null
   level: LevelSpec | null
   levelIndex: number
@@ -110,6 +112,7 @@ function endlessRun(): RunConfig {
     words: null,
     reverse: false,
     earOnly: false,
+    phonics: false,
     obstacles: null,
     level: null,
     levelIndex: -1,
@@ -140,11 +143,12 @@ function levelMode(level: LevelSpec): Mode {
 
 function levelRun(level: LevelSpec, index: number): RunConfig {
   return {
-    table: tableFromChars(data.lang, level.chars),
+    table: level.table ?? tableFromChars(data.lang, level.chars),
     mode: levelMode(level),
     words: level.words ?? null,
     reverse: level.kind === 'reverse',
     earOnly: level.kind === 'ear',
+    phonics: level.kind === 'phonics',
     obstacles: level.layout ? layoutCells(level.layout) : null,
     level,
     levelIndex: index,
@@ -294,7 +298,18 @@ function makePlayScene(r: RunConfig): Scene {
       const showCue = (target: string, sound: string) => {
         diag?.mark('cue')
         tones.duck()
-        if (r.reverse) {
+        if (r.phonics) {
+          /**
+           * Phonics: the cue is a WORD, and the child eats the letter it
+           * starts with. The word is spoken and also shown — a child who
+           * cannot read yet is working from the sound anyway, and one who can
+           * gets the letter-to-word link that is the whole lesson. Unlike the
+           * other cues this speaks `sound`, not the glyph: saying "A" gives
+           * the letter's NAME, which is the thing phonics exists to replace.
+           */
+          hud.setCue(sound)
+          speech.speak(sound)
+        } else if (r.reverse) {
           // The glyph IS the question; speaking it would answer a tile.
           hud.setCue(target)
         } else if (r.earOnly) {
