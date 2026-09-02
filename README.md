@@ -24,6 +24,25 @@ then open `ios/App/App.xcodeproj`. Native additions (haptics, TTS fallback,
 status bar) live in [src/ui/native.ts](src/ui/native.ts) and no-op on the web.
 The full store-submission walkthrough is in [SHIP-IOS.md](SHIP-IOS.md).
 
+## Tests
+
+```sh
+npm run dev     # the browser tests need the dev server on :5199
+npm test        # simulation suite, then browser suite
+```
+
+`tests/sim-test.ts` and `tests/srs-test.ts` are deterministic and need no
+browser: they assert the rules that decide whether the game is fair — the body
+cap, the miss floor, that every learn level still shows the answer after
+twelve deliberate misses, that boss levels refuse to narrow, and the whole
+spaced-repetition ladder.
+
+The `.cjs` suites drive the real app through Chrome. They cover the things
+only a running app can answer: that a learn level cannot defeat a child, that
+the interface speaks itself but stays silent during play, that a counting cue
+shows dots and says nothing, that blending cues the whole word, and that the
+parent corner is genuinely on screen rather than merely present in the DOM.
+
 ## Architecture
 
 The project is deliberately structured to demonstrate core game-development
