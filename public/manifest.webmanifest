@@ -1,6 +1,6 @@
 {
-  "name": "Alphabite",
-  "short_name": "Alphabite",
+  "name": "Alphabet Snake",
+  "short_name": "Alphabet Snake",
   "description": "Snake, but the food is a writing system. Eat the character you hear.",
   "start_url": "./",
   "scope": "./",

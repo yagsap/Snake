@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.yagsap.scriptsnake',
-  appName: 'Alphabite',
+  appName: 'Alphabet Snake',
   webDir: 'dist',
   // Matches --indigo so no white flash ever shows behind the webview.
   backgroundColor: '#1C2541',

@@ -3,27 +3,25 @@
 Paste-ready text for App Store Connect. Character limits are Apple's; the
 counts in brackets are what these actually use.
 
-## Name (30 max)
+## Name (30 max) — CHOSEN
 
 ```
-Alphabite
+Alphabet Snake
 ```
-[9] — a pun on what the game literally is: you bite letters. Short enough that
-the subtitle carries all the explaining, which is the right division of labour
-when both fields are searchable and the name is weighted heaviest.
-
-If taken, in order of preference:
-- `Alphabite: Learn Any Script` [27]
-- `Alphabite — Letter Snake` [24]
-- `Alphabet Snake` [14] — plainer, heavily searched, reads a little young
+[14] — "Alphabite" was taken. This one is plainer but tests better: nobody who
+reads it is confused for a second, and "alphabet" is a heavily-searched term.
+Its one weakness is that it reads a little young, which undersells the
+Japanese, Chinese and Korean depth — so the subtitle must carry that, and does.
 
 ## Subtitle (30 max)
 
 ```
-Eat the letter you hear
+Kana, hanzi, Greek & Cyrillic
 ```
-[23] — the whole mechanic in five words. Alternative, if discovery matters more
-than charm: `Learn kana, Greek & Cyrillic` [28]
+[29] — deliberately NOT a restatement of the mechanic here. Paired with a name
+this plain, the subtitle's job is to say "this is not a toddler ABC app" and to
+pick up the script keywords the name cannot. If the listing ever gets a more
+distinctive name, swap back to the mechanic: `Eat the letter you hear` [23].
 
 ## Promotional text (170 max, editable without review)
 
