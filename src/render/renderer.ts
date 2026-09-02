@@ -532,10 +532,15 @@ export class Renderer {
       }
       one(0, 0)
       if (mode.wrap) {
+        // The SAME one-cell band fillMirrors uses for the head and the
+        // carried glyphs. Mirroring only once a segment had crossed the edge
+        // meant a mirrored head could appear with no body and no shadow
+        // beneath it for up to half a move. Copies that land off-canvas are
+        // clipped and cost nothing.
         const sx =
-          Math.min(x1, cx, x2) < 0 ? W : Math.max(x1, cx, x2) > W ? -W : 0
+          Math.min(x1, cx, x2) < CELL ? W : Math.max(x1, cx, x2) > W - CELL ? -W : 0
         const sy =
-          Math.min(y1, cy, y2) < 0 ? W : Math.max(y1, cy, y2) > W ? -W : 0
+          Math.min(y1, cy, y2) < CELL ? W : Math.max(y1, cy, y2) > W - CELL ? -W : 0
         if (sx) one(sx, 0)
         if (sy) one(0, sy)
         if (sx && sy) one(sx, sy)
@@ -562,10 +567,15 @@ export class Renderer {
       }
       one(0, 0)
       if (mode.wrap) {
+        // The SAME one-cell band fillMirrors uses for the head and the
+        // carried glyphs. Mirroring only once a segment had crossed the edge
+        // meant a mirrored head could appear with no body and no shadow
+        // beneath it for up to half a move. Copies that land off-canvas are
+        // clipped and cost nothing.
         const sx =
-          Math.min(x1, cx, x2) < 0 ? W : Math.max(x1, cx, x2) > W ? -W : 0
+          Math.min(x1, cx, x2) < CELL ? W : Math.max(x1, cx, x2) > W - CELL ? -W : 0
         const sy =
-          Math.min(y1, cy, y2) < 0 ? W : Math.max(y1, cy, y2) > W ? -W : 0
+          Math.min(y1, cy, y2) < CELL ? W : Math.max(y1, cy, y2) > W - CELL ? -W : 0
         if (sx) one(sx, 0)
         if (sy) one(0, sy)
         if (sx && sy) one(sx, sy)
@@ -625,8 +635,12 @@ export class Renderer {
      */
     ctx.save()
     ctx.translate(3, 5)
-    ctx.strokeStyle = 'rgba(0,0,0,.26)'
-    ctx.lineWidth = CELL * 0.86
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'
+    // NARROWER than the body's thinnest point (0.46 at the tail), never
+    // wider. A shadow that outgrows its caster peeks out on the LIT side —
+    // up-left of the tail, where a down-right light cannot put one. Held
+    // under the minimum, the offset alone decides where it shows.
+    ctx.lineWidth = CELL * 0.42
     ctx.beginPath()
     for (let k = 0; k < len; k++) addSeg(k)
     ctx.stroke()
@@ -640,13 +654,15 @@ export class Renderer {
       strokeSeg(k)
     }
 
-    // Specular highlight along the spine.
+    // Specular highlight along the spine — one path, one stroke, for the
+    // same reason as the shadow: per-segment strokes of a translucent colour
+    // composite twice under every round cap, drawing a chain of bright
+    // scallops down the spine instead of an even highlight.
     ctx.strokeStyle = 'rgba(255,255,255,.10)'
-    for (let k = 0; k < len; k++) {
-      const j = len - 1 - k
-      ctx.lineWidth = lerp(CELL * 0.22, CELL * 0.08, j / denom)
-      strokeSeg(k)
-    }
+    ctx.lineWidth = CELL * 0.15
+    ctx.beginPath()
+    for (let k = 0; k < len; k++) addSeg(k)
+    ctx.stroke()
 
     // Earned characters, carried on the body — the run doubles as a record of
     // what you got right.

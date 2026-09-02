@@ -693,16 +693,30 @@ function makeOnboardScene(): Scene {
 function makeReadyScene(): Scene {
   let left = JUICE.readySeconds
   let shown = Number.POSITIVE_INFINITY
+  let firstEver = false
   return {
     name: 'ready',
     drawsBelow: true,
     enter() {
+      firstEver = Object.keys(data.stats).length === 0
       // The one-line tutorial, shown only before anyone's very first bite.
-      if (Object.keys(data.stats).length === 0) {
+      if (firstEver) {
         renderer.fx.text(
           BOARD.size / 2, CELL * 2,
           'eat the character you hear', THEME.gold,
           JUICE.readySeconds + 1, 18,
+        )
+      }
+    },
+    exit() {
+      // The steering hint belongs to the moment the snake actually MOVES.
+      // Fired from play.enter it burned most of its life behind a frozen
+      // countdown — the first-ever player read it while nothing could move,
+      // then lost it a second into the only part where it applies.
+      if (firstEver) {
+        renderer.fx.text(
+          BOARD.size / 2, BOARD.size * 0.72,
+          'drag anywhere to steer', THEME.washi, 3.5, 17,
         )
       }
     },
@@ -719,21 +733,28 @@ function makeReadyScene(): Scene {
         renderer.fx.text(BOARD.size / 2, BOARD.size / 2, String(n), THEME.gold, 0.85, 64)
         tones.count()
       }
-      if (left <= 0) skipReady()
+      if (left <= 0) skipReady(false)
     },
   }
 }
 
-/** End the countdown (naturally or by tap) and let the run begin. */
-function skipReady(): void {
+/**
+ * End the countdown and let the run begin. `impatient` marks the tap path:
+ * the numeral on screen is still fading at the very point "go" would land,
+ * so the tap gets the sound without the pile-up. On natural expiry the last
+ * numeral has already died and "go" lands on a clear board.
+ */
+function skipReady(impatient: boolean): void {
   if (scenes.top?.name !== 'ready') return
   scenes.pop()
-  goJuice()
+  goJuice(!impatient)
 }
 
 /** The "go" beat that releases a run into motion. */
-function goJuice(): void {
-  renderer.fx.text(BOARD.size / 2, BOARD.size / 2, 'go', THEME.jadeBright, 0.5, 44)
+function goJuice(withText = true): void {
+  if (withText) {
+    renderer.fx.text(BOARD.size / 2, BOARD.size / 2, 'go', THEME.jadeBright, 0.5, 44)
+  }
   tones.go()
 }
 
@@ -987,7 +1008,7 @@ bindInput(playScr, {
         // wants to hear the target again — launching the run instead would
         // punish the keyboard player for using the key as taught.
         if (top === 'ready' && action === 'tap') {
-          skipReady()
+          skipReady(true)
           break
         }
         if (
@@ -1002,18 +1023,28 @@ bindInput(playScr, {
       case 'pause':
         // Never pause a dead world: the death timeout is about to bring up
         // its card, and a pause pushed in that window would orphan it.
-        if (top === 'play' && world?.alive) scenes.push(makePauseScene())
-        else if (top === 'pause') scenes.pop()
+        // 'ready' counts as play here: the countdown leaves a fully visible,
+        // correctly-labelled pause button on screen, and a control that is
+        // enabled but inert is worse than one that is absent.
+        if ((top === 'play' || top === 'ready') && world?.alive) {
+          scenes.push(makePauseScene())
+        } else if (top === 'pause') scenes.pop()
         break
       case 'learn':
         if (top === 'chart') scenes.pop()
-        else if (top === 'pause' || top === 'menu' || (top === 'play' && world?.alive)) {
+        else if (
+          top === 'pause' ||
+          top === 'menu' ||
+          ((top === 'play' || top === 'ready') && world?.alive)
+        ) {
           scenes.push(makeChartScene(run && scenes.has('play') ? run.table : table))
         }
         break
       case 'escape':
         if (top === 'chart' || top === 'pause' || top === 'campaign') scenes.pop()
-        else if (top === 'play' && world?.alive) scenes.push(makePauseScene())
+        else if ((top === 'play' || top === 'ready') && world?.alive) {
+          scenes.push(makePauseScene())
+        }
         break
     }
   },
@@ -1048,8 +1079,13 @@ bindInput(playScr, {
 
 document.getElementById('pauseBtn')?.addEventListener('click', () => {
   const top = scenes.top?.name
-  if (top === 'play' && world?.alive) scenes.push(makePauseScene())
-  else if (top === 'pause') scenes.pop()
+  if ((top === 'play' || top === 'ready') && world?.alive) {
+    scenes.push(makePauseScene())
+  } else if (top === 'pause') scenes.pop()
+  // Never leave the button focused: bindInput deliberately lets a focused
+  // BUTTON keep Space and Enter, so a lingering focus here silently kills
+  // the taught replay-the-cue key for the rest of the run.
+  pauseBtn.blur()
 })
 
 document.getElementById('quitBtn')?.addEventListener('click', () => {
@@ -1071,7 +1107,14 @@ document.getElementById('seal')?.addEventListener('click', () => {
 // must not keep killing them.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (scenes.top?.name === 'play' && world?.alive) scenes.push(makePauseScene())
+    // 'ready' too: rAF suspends while hidden so the countdown does NOT
+    // expire, and without this the player returned to ~1s of clock and a
+    // snake moving a heartbeat later, with pause unreachable until it ran
+    // out. Pausing over the countdown resumes it deliberately instead.
+    const top = scenes.top?.name
+    if ((top === 'play' || top === 'ready') && world?.alive) {
+      scenes.push(makePauseScene())
+    }
     saveNow(data)
     // The OS may unload the TTS voice while we're hidden; re-prime it on the
     // first gesture after coming back so the reload happens behind the pause
