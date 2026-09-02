@@ -466,8 +466,8 @@ const EN: Draft[] = [
   // order is what matters, and this is the half that can wait.
   chapter('letter names: A to M', 'ABCDEFGHIJKLM'),
   chapter('letter names: N to Z', 'NOPQRSTUVWXYZ'),
-  reverse('recall: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
-  ear('by ear: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', { goal: G(15, 4) }),
+  reverse('recall: capitals', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+  ear('by ear: capitals', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', { goal: G(15, 4) }),
   words('longer words', [
     { w: 'BIRD', gloss: 'bird' }, { w: 'FISH', gloss: 'fish' },
     { w: 'HORSE', gloss: 'horse' }, { w: 'PLANT', gloss: 'plant' },
@@ -483,8 +483,8 @@ const EN: Draft[] = [
     { w: 'sun', gloss: 'sun' }, { w: 'cake', gloss: 'cake' },
     { w: 'gold', gloss: 'gold' }, { w: 'wimp', gloss: 'wimp' },
   ]),
-  reverse('recall: a to z', 'abcdefghijklmnopqrstuvwxyz'),
-  ear('by ear: a to z', 'abcdefghijklmnopqrstuvwxyz', { goal: G(15, 4) }),
+  reverse('recall: small letters', 'abcdefghijklmnopqrstuvwxyz'),
+  ear('by ear: small letters', 'abcdefghijklmnopqrstuvwxyz', { goal: G(15, 4) }),
   gauntlet('the whole alphabet', 'BCDEGPTVZbdpqnuwmMN', { goal: G(15, 2), paceScale: 1.15 }),
 ]
 
@@ -575,6 +575,31 @@ export const CAMPAIGNS: Record<LangId, LevelSpec[]> = Object.fromEntries(
     DRAFTS[lang].map((d) => ({ ...d, id: `${lang}-${slug(d.title)}` })),
   ]),
 ) as Record<LangId, LevelSpec[]>
+
+/**
+ * Ids must be unique, and nothing else can check it for us.
+ *
+ * `slug` lowercases, so "recall: A to Z" and "recall: a to z" — two genuinely
+ * different English levels — collided on one id. Progress is stored per id, so
+ * clearing the capitals level silently marked the lowercase one cleared,
+ * unlocked the final boss, and inflated every level count on the menu. It
+ * typechecked, it ran, and nothing anywhere would have reported it.
+ *
+ * Failing loudly at module load is the right trade: a duplicate title is
+ * always an authoring mistake, and finding it the moment the file is edited is
+ * far cheaper than finding it in a save file.
+ */
+for (const lang of Object.keys(CAMPAIGNS) as LangId[]) {
+  const seen = new Set<string>()
+  for (const lvl of CAMPAIGNS[lang]) {
+    if (seen.has(lvl.id)) {
+      throw new Error(
+        `duplicate level id "${lvl.id}" in ${lang} — two levels share a title`,
+      )
+    }
+    seen.add(lvl.id)
+  }
+}
 
 /** Old index-based id for level `i`, so saved progress can be carried over. */
 export function legacyLevelId(lang: LangId, index: number): string {

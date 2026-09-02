@@ -227,7 +227,7 @@ export class MenuView {
 
     this.langGrid.innerHTML = LANG_IDS.map((id) => {
       const [native, english] = LANGUAGES[id].labels
-      return `<button class="chip ${id === data.lang ? 'on' : ''}" data-lang="${id}" data-say="${english}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
+      return `<button class="chip ${id === data.lang ? 'on' : ''}" data-lang="${id}" data-say="${LANGUAGES[id].name}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
     }).join('')
     for (const btn of this.langGrid.querySelectorAll<HTMLElement>('[data-lang]')) {
       btn.addEventListener('click', () => this.cb.onLang(btn.dataset.lang as LangId))
@@ -732,7 +732,7 @@ export class OnboardView {
     const grid = $('onboardGrid')
     grid.innerHTML = LANG_IDS.map((id) => {
       const [native, english] = LANGUAGES[id].labels
-      return `<button class="chip" data-lang="${id}" data-say="${english}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
+      return `<button class="chip" data-lang="${id}" data-say="${LANGUAGES[id].name}"><b>${native}</b><span>${english}</span><i class="sample">${sampleGlyphs(id)}</i></button>`
     }).join('')
     grid.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')

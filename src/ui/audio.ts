@@ -35,6 +35,17 @@ export class Speech {
 
   /** Called whenever the usable voice list changes, so the UI can re-render. */
   onVoicesChanged: (() => void) | null = null
+  /** A cue that arrived before any voice existed — see speak(). */
+  private unvoiced: string | null = null
+
+  /** Retry the cue that was dropped for want of a voice, if `stillWanted`
+   *  confirms the question has not moved on. */
+  retryUnvoiced(stillWanted: (text: string) => boolean): void {
+    const text = this.unvoiced
+    if (!text || !this.voice) return
+    this.unvoiced = null
+    if (stillWanted(text)) this.speak(text)
+  }
 
   constructor(
     private lang: LangId,
@@ -162,13 +173,28 @@ export class Speech {
     // does not. `play` answers synchronously and reports false for a clip it
     // has not decoded yet, so the player hears synthesis this time and the
     // recording next — the one thing that must never happen here is silence.
-    if (this.clips.play(clipKey(this.lang, text))) return
+    if (this.clips.play(clipKey(this.lang, text))) {
+      // The clip answered THIS cue, so any cue parked while the engine was
+      // busy is now stale — flushing it later would speak an old question
+      // over a new board.
+      this.pendingText = null
+      return
+    }
     // In the app: our own native bridge, which holds one audio session open
     // forever and does all speech work off the main thread. A second device
     // A/B showed even the webview engine paying a per-utterance session
     // transition inside an app shell; this path pays it once, at launch.
     if (nativeSpeak(text, this.lang)) return
-    if (!this.voice) return
+    if (!this.voice) {
+      // getVoices() is routinely empty for the first moments of a web load,
+      // and a cue dropped here was dropped for good — the run's first
+      // question was never asked. Remember it so the voiceschanged handler
+      // can ask it once the engine is ready; the caller confirms it is still
+      // the current question before replaying.
+      this.unvoiced = text
+      return
+    }
+    this.unvoiced = null
     // Deferred a tick: TTS engine startup is main-thread work on several
     // platforms, and the frame it would otherwise share is the one drawing
     // the eat feedback. One frame of cue latency is imperceptible; a hitch
@@ -218,6 +244,12 @@ export class Speech {
     if (nativeSpeak(say, 'en')) return
     const voice = this.uiVoice()
     if (!voice) return
+    // Best-effort, never queued. A child drumming on the menu was appending
+    // an utterance per tap to an unbounded engine queue, and the parked
+    // lesson cue then drained in BEHIND all of it. If the engine is busy,
+    // the label simply goes unsaid — UI speech is a convenience, the cue is
+    // the product.
+    if (speechSynthesis.speaking || speechSynthesis.pending) return
     const u = new SpeechSynthesisUtterance(say)
     u.voice = voice
     u.lang = voice.lang
@@ -253,6 +285,10 @@ export class Speech {
   }
 
   private speakNow(text: string): void {
+    // Muting must silence the parked cue too: `finish` flushes it through
+    // here unconditionally, so without this check the kill-switch let one
+    // last utterance escape after it was thrown.
+    if (this.muted) return
     const voice = this.voice
     if (!voice) return
     const u = new SpeechSynthesisUtterance(

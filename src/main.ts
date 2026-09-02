@@ -47,7 +47,7 @@ import {
   isMastered,
   seedKnown,
 } from './game/progression'
-import { World } from './game/world'
+import { World, type DeathReason } from './game/world'
 import { Renderer } from './render/renderer'
 import { Speech, Tones } from './ui/audio'
 import { Hud } from './ui/hud'
@@ -137,7 +137,16 @@ function endlessRun(): RunConfig {
     phonics: false,
     counting: false,
     blending: false,
-    scaffold: false,
+    /**
+     * The same protections as a learn level, because the menu's one primary
+     * button routes HERE whenever enough characters are due — it is labelled
+     * "Review N characters" and it is the most child-facing run in the app.
+     * Leaving it unscaffolded and unbounded meant the single button a
+     * five-year-old presses could drop them into the one mode built for
+     * someone else.
+     */
+    scaffold: true,
+    maxLength: LEARN_MAX_LENGTH,
     obstacles: null,
     level: null,
     levelIndex: -1,
@@ -351,6 +360,21 @@ function makePlayScene(r: RunConfig): Scene {
 
       const showCue = (target: string, sound: string) => {
         diag?.mark('cue')
+        /**
+         * A cue that arrives after the level has resolved belongs to a
+         * question nobody will be asked. `onCorrect` emits 'eat' BEFORE it
+         * respawns, so on the goal-reaching bite the eat handler pushes the
+         * celebration scene first and the fresh spawn's cue then fired
+         * underneath it — spoken over the fanfare, about a board the child
+         * will never see.
+         */
+        if (
+          scenes.top &&
+          scenes.top.name !== 'play' &&
+          scenes.top.name !== 'ready'
+        ) {
+          return
+        }
         tones.duck()
         if (r.blending && w.word) {
           /**
@@ -389,6 +413,13 @@ function makePlayScene(r: RunConfig): Scene {
           hud.setCue(target)
         } else if (r.earOnly) {
           hud.setCue(speech.current ? '♪' : sound)
+          speech.speak(target)
+        } else if (r.words && w.word) {
+          // The seal shows the WORD. The default branch shows `sound`, which
+          // for a word is every letter's sound run together — in English that
+          // is "seeaytee", nonsense in a 58px box. The word is already public:
+          // it is spoken aloud and printed under the board with progress.
+          hud.setCue(w.word.w)
           speech.speak(target)
         } else {
           hud.setCue(data.showRomaji || !speech.current ? sound : '♪')
@@ -556,7 +587,8 @@ function makePlayScene(r: RunConfig): Scene {
           }
         }),
 
-        w.events.on('death', ({ score, eaten }) => {
+        w.events.on('death', ({ score, eaten, reason }) => {
+          lastDeath = reason
           const head = w.snake[0]
           if (head) {
             renderer.sprites.panic(
@@ -788,7 +820,12 @@ function makeLevelEndScene(
           ? `${w.score} points`
           : w.alive
             ? 'Nearly! Have another go.'
-            : 'Oops, you bumped into yourself.',
+            // Say what actually happened. Stones are the only other way to
+            // crash, and telling a child they bumped into themselves when they
+            // hit a rock is a small lie they can plainly see is a lie.
+            : lastDeath === 'wall'
+              ? 'Oops, you hit a rock.'
+              : 'Oops, you bumped into yourself.',
         hasNext: r.levelIndex >= 0 && r.levelIndex + 1 < levels.length,
         receipt: runReceipt(w),
       })
@@ -1204,6 +1241,11 @@ const gameOverView = new GameOverView(
   () => void shareDailyResult(),
 )
 
+/** Why the last run ended, so the end card can say the true thing. Module
+ *  scope because the play scene records it and the end card, a different
+ *  scene entirely, is what reads it. */
+let lastDeath: DeathReason | null = null
+
 /** The finished daily's share text, rebuilt on every daily death. */
 let lastDailyShare: string | null = null
 
@@ -1306,12 +1348,32 @@ function weekSummary(): WeekSummary {
  * only after a hold — twice, since the door is gated too.
  */
 function resetProgress(): void {
-  if (!confirm(`Clear your ${LANGUAGES[data.lang].name} progress?`)) return
-  // Every set of the language, not just the visible table — the confirm names
-  // the language, so that is what gets cleared.
+  const name = LANGUAGES[data.lang].name
+  if (!confirm(`Clear all ${name} progress — levels, practice and history?`)) {
+    return
+  }
+  /**
+   * Reset means reset.
+   *
+   * This used to delete `stats` alone, leaving the cleared levels, the stars,
+   * the fortnight of practice history and the best score untouched — so a
+   * parent held the button for three seconds, confirmed, and watched the
+   * weekly view redraw with identical numbers and every level still ticked.
+   * A destructive control that visibly does nothing is worse than none: the
+   * next thing they try is deleting the app.
+   */
   for (const set of Object.values(LANGUAGES[data.lang].sets)) {
     for (const ch of Object.keys(set)) delete data.stats[ch]
   }
+  for (const id of Object.keys(data.campaign)) {
+    if (id.startsWith(`${data.lang}-`)) delete data.campaign[id]
+  }
+  // History is a day-by-day record of practice and is not split by language;
+  // leaving it would keep reporting work the parent just asked to erase.
+  data.history = {}
+  data.bestScore = 0
+  data.bestEaten = 0
+  data.daily = null
   save(data)
   if (scenes.top?.name === 'parent') parentView.open(weekSummary())
   if (scenes.has('chart')) {
@@ -1371,7 +1433,25 @@ bindInput(playScr, {
           !run?.reverse
         ) {
           hud.pulseSeal()
-          speech.speak(run?.words && world.word ? world.word.w : world.target)
+          /**
+           * Replay the cue this level actually GAVE, not the answer.
+           *
+           * Speaking `world.target` was right when every level spoke its
+           * target, and became a way to cheat the moment two did not. On a
+           * counting level the cue is silent dots, so speaking the numeral
+           * hands the child the answer outright; on a phonics level the cue is
+           * "apple", so speaking the target says the letter NAME — the exact
+           * thing those levels exist to stop teaching.
+           */
+          if (run?.counting) {
+            // Nothing to replay: the cue is the dots, and they are still there.
+          } else if (run?.blending && world.word) {
+            speech.speak(world.word.w)
+          } else if (run?.phonics) {
+            speech.speak(run.table[world.target] ?? world.target)
+          } else {
+            speech.speak(run?.words && world.word ? world.word.w : world.target)
+          }
         }
         break
       case 'pause':
@@ -1485,6 +1565,16 @@ speech.onVoicesChanged = () => {
   // gesture already happened, warm the engine now — warmup un-latches itself
   // on refusal, so calling early costs nothing.
   speech.warmup()
+  // And ask the question that was dropped while no voice existed — but only
+  // if it is still the question on the board, and only in modes where the
+  // cue is spoken at all.
+  speech.retryUnvoiced(
+    (text) =>
+      (scenes.top?.name === 'play' || scenes.top?.name === 'ready') &&
+      !run?.reverse &&
+      !run?.counting &&
+      (text === world?.target || (!!world?.word && text === world.word.w)),
+  )
 }
 
 /**
@@ -1573,6 +1663,27 @@ function wireSpeakOnTouch(): void {
   )
 }
 wireSpeakOnTouch()
+
+/**
+ * The placement grid speaks its characters.
+ *
+ * "Which do you already know?" is step two of every fresh install, and its
+ * tiles are the one thing on that screen a pre-reader can actually judge —
+ * but only by SOUND, which is how they know a character before they can read
+ * about it. Spoken in the learning language, because the character is the
+ * content here, not the interface.
+ */
+document.addEventListener(
+  'pointerdown',
+  (e) => {
+    const tile = (e.target as HTMLElement | null)?.closest<HTMLElement>(
+      '#placeGrid [data-ch]',
+    )
+    const ch = tile?.dataset['ch']
+    if (ch) speech.speak(ch)
+  },
+  { passive: true },
+)
 
 /**
  * Tapping a missed character on the end card replays it — in the language

@@ -167,6 +167,12 @@ function parseFocus(raw: unknown): Focus | null {
   }
 }
 
+/** Every level id that exists, so saved progress naming anything else is
+ *  recognised as stale rather than carried around forever. */
+const KNOWN_LEVEL_IDS = new Set(
+  Object.values(CAMPAIGNS).flatMap((levels) => levels.map((l) => l.id)),
+)
+
 /** Days to keep. Two weeks answers "this week" and "last week" and no more. */
 export const HISTORY_DAYS = 14
 
@@ -175,7 +181,20 @@ function parseHistory(raw: unknown): Record<string, DayLog> {
   if (!raw || typeof raw !== 'object') return out
   for (const [day, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!v || typeof v !== 'object') continue
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue
+    // A real calendar date, not just the shape of one. prunedHistory keeps
+    // the lexically LAST fourteen keys, so a corrupt "2026-13-99" would sort
+    // after every real date and pin itself into the window forever.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
+    if (!m) continue
+    const [, yy, mm, dd] = m as unknown as [string, string, string, string]
+    const dt = new Date(Number(yy), Number(mm) - 1, Number(dd))
+    if (
+      dt.getFullYear() !== Number(yy) ||
+      dt.getMonth() !== Number(mm) - 1 ||
+      dt.getDate() !== Number(dd)
+    ) {
+      continue
+    }
     const o = v as Record<string, unknown>
     const chars = Array.isArray(o['chars'])
       ? (o['chars'] as unknown[]).filter((c): c is string => typeof c === 'string')
@@ -226,20 +245,22 @@ function parseCampaign(raw: unknown): Record<string, LevelState> {
       perfect: bool(o['perfect'], false),
     }
     /**
-     * Levels used to be keyed by position (`en-5`). They are now keyed by
-     * title, so a save written under the old scheme is translated through the
-     * ladder as it stood — losing progress on a content update is bad, but
-     * silently awarding it to the WRONG level is worse, so anything that does
-     * not resolve to a real level is dropped rather than kept as a stray key.
+     * Levels are keyed by title. Two rules, and the second is the one that
+     * was quietly broken:
+     *
+     * 1. Positional ids (`en-5`) are DROPPED, not translated. They were only
+     *    ever written by builds from before the change, and translating one
+     *    means resolving it against today's ladder — which has since been
+     *    reordered and rebuilt around phonics, so `en-5` now names a level the
+     *    player never saw. Losing progress on a content update is bad;
+     *    silently awarding it to the wrong level is worse.
+     * 2. An id that matches no real level is dropped too. The previous version
+     *    said it did this and did not: it kept every unknown key forever, so a
+     *    renamed level left a stray entry that inflated nothing visibly and
+     *    would have quietly resurrected if the name ever came back.
      */
-    const legacy = /^([a-z]{2})-(\d+)$/.exec(id)
-    if (legacy) {
-      const lang = legacy[1] as LangId
-      const idx = Number(legacy[2]) - 1
-      const level = CAMPAIGNS[lang]?.[idx]
-      if (level) out[level.id] = state
-      continue
-    }
+    if (/^[a-z]{2}-\d+$/.test(id)) continue
+    if (!KNOWN_LEVEL_IDS.has(id)) continue
     out[id] = state
   }
   return out
@@ -263,14 +284,21 @@ function parseVoices(raw: unknown): Record<string, string> {
 
 export function load(): SaveData {
   const base = defaults()
-  let raw: unknown = null
-  try {
-    raw =
-      JSON.parse(localStorage.getItem(KEY) ?? 'null') ??
-      JSON.parse(localStorage.getItem(LEGACY_KEY) ?? 'null')
-  } catch {
-    raw = null
+  /**
+   * Each record gets its own recovery. With one try around both reads, a v2
+   * record corrupt enough to fail JSON.parse also threw away the intact v1
+   * record sitting right next to it — the one moment a fallback exists for is
+   * the one moment it was skipped, and a returning player was re-onboarded
+   * as brand new.
+   */
+  const read = (key: string): unknown => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? 'null')
+    } catch {
+      return null
+    }
   }
+  const raw: unknown = read(KEY) ?? read(LEGACY_KEY)
   if (!raw || typeof raw !== 'object') return base
   const d = raw as Record<string, unknown>
 
