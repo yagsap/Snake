@@ -103,6 +103,8 @@ interface RunConfig {
   phonics: boolean
   /** Cue is a quantity of dots and the answer is the numeral for it. */
   counting: boolean
+  /** Cue is a whole WORD; the child segments it and eats the letters. */
+  blending: boolean
   /** Cap on body length; undefined leaves the classic unbounded snake. */
   maxLength?: number
   /** Narrow the board after a miss — see WorldOptions.scaffold. */
@@ -126,6 +128,7 @@ function endlessRun(): RunConfig {
     earOnly: false,
     phonics: false,
     counting: false,
+    blending: false,
     scaffold: false,
     obstacles: null,
     level: null,
@@ -182,6 +185,7 @@ function levelRun(level: LevelSpec, index: number): RunConfig {
     earOnly: level.kind === 'ear',
     phonics: level.kind === 'phonics',
     counting: level.kind === 'count',
+    blending: level.kind === 'blend',
     // Stones are a boss-level hazard. In a learn level they are one more way
     // to lose that has nothing to do with reading a character.
     obstacles: level.layout && isBoss(level) ? layoutCells(level.layout) : null,
@@ -335,7 +339,17 @@ function makePlayScene(r: RunConfig): Scene {
       const showCue = (target: string, sound: string) => {
         diag?.mark('cue')
         tones.duck()
-        if (r.counting) {
+        if (r.blending && w.word) {
+          /**
+           * Blending. The child hears the whole word and has to break it into
+           * sounds themselves — which is the act of reading, and the reason
+           * this cue speaks the word rather than the letter it currently
+           * wants. The board already holds the word's letters and the target
+           * walks through them, so one cue covers the whole word.
+           */
+          hud.setCue(w.word.w)
+          speech.speak(w.word.w)
+        } else if (r.counting) {
           /**
            * A quantity, not a word. Silent on purpose: speaking "three" and
            * asking for 三 is one more listening task, where showing three dots

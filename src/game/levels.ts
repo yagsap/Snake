@@ -41,6 +41,7 @@ export type LevelKind =
   | 'ear'
   | 'phonics'
   | 'count'
+  | 'blend'
 
 export interface LevelGoal {
   /** Correct eats (or completed words, in a words level) needed to clear. */
@@ -85,6 +86,7 @@ export const KIND_ICON: Record<LevelKind, string> = {
   ear: '👂',
   phonics: '🔊',
   count: '🔢',
+  blend: '🧩',
 }
 
 export const KIND_LABEL: Record<LevelKind, string> = {
@@ -95,6 +97,7 @@ export const KIND_LABEL: Record<LevelKind, string> = {
   ear: 'listen',
   phonics: 'sounds',
   count: 'count',
+  blend: 'blend',
 }
 
 // ---------------------------------------------------------------- layouts --
@@ -208,6 +211,23 @@ const phonics = (title: string, chars: string, opts: Partial<Draft> = {}): Draft
 const count = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
   title, kind: 'count', chars, goal: G(10, 3), paceScale: 0.7, ...opts,
 })
+/**
+ * Blending: hear a whole word, then eat its letters in order by SOUND.
+ *
+ * This is the step where letter recognition becomes reading. A words level
+ * already puts a word's letters on the board and walks the target through
+ * them; the difference is the cue — the child hears "cat", not "see", and has
+ * to segment it themselves. The table is the phonics one, so the correction
+ * after a miss reads "c cat" rather than "c see".
+ */
+const blend = (title: string, list: readonly WordEntry[], opts: Partial<Draft> = {}): Draft => {
+  const chars = [...new Set(list.flatMap((e) => [...e.w]))].join('')
+  return {
+    title, kind: 'blend', chars, words: list,
+    table: Object.fromEntries([...chars].map((c) => [c, PHONICS_EN[c] as string])),
+    goal: G(5, 3), paceScale: 0.75, ...opts,
+  }
+}
 const reverse = (title: string, chars: string, opts: Partial<Draft> = {}): Draft => ({
   title, kind: 'reverse', chars, goal: G(12, 3), paceScale: 0.75, ...opts,
 })
@@ -379,37 +399,56 @@ const HI: Draft[] = [
 ]
 
 const EN: Draft[] = [
-  chapter('A to E', 'ABCDE', { goal: G(10, 3), paceScale: 0.7 }),
-  phonics('sounds: A to E', 'ABCDE'),
+  /**
+   * SOUNDS LEAD. A child learning to read needs the sound a letter makes
+   * before its name — "bee" does not help you decode "bat", and letter names
+   * are known to interfere with early decoding. So the phonics levels are the
+   * spine here and the name levels are reinforcement much later, once the
+   * shapes and sounds are secure. Each sounds level teaches a shape and its
+   * sound together; the blending level after it turns that into reading.
+   *
+   * Every blending word is spellable from the letters taught so far and has
+   * no repeated letter, which is what WordEntry requires.
+   */
+  phonics('sounds: A to E', 'ABCDE', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('count to five', '12345', { goal: G(10, 3), paceScale: 0.7 }),
   chapter('all ten numbers', '6789012345', { goal: G(12, 3), paceScale: 0.8 }),
   count('how many?', '12345'),
-  chapter('F to J', 'FGHIJABCDE'),
-  gauntlet('the bee family', 'BCDEGPTVZ', { goal: G(12, 2) }),
-  chapter('K to O', 'KLMNOFGHIJ', { layout: 'garden' }),
-  phonics('sounds: F to O', 'FGHIJKLMNO'),
-  words('first words', [
-    { w: 'CAT', gloss: 'cat' }, { w: 'DOG', gloss: 'dog' },
-    { w: 'BED', gloss: 'bed' }, { w: 'FIG', gloss: 'fig' },
-    { w: 'HEN', gloss: 'hen' }, { w: 'JAM', gloss: 'jam' },
+  phonics('sounds: F to J', 'FGHIJABCDE'),
+  blend('blend: first words', [
+    { w: 'BIG', gloss: 'big' }, { w: 'DIG', gloss: 'dig' },
+    { w: 'FIG', gloss: 'fig' }, { w: 'BED', gloss: 'bed' },
+    { w: 'BAG', gloss: 'bag' }, { w: 'CAB', gloss: 'cab' },
+    { w: 'HID', gloss: 'hid' }, { w: 'JIG', gloss: 'jig' },
   ]),
-  chapter('P to T', 'PQRSTKLMNO'),
+  phonics('sounds: K to O', 'KLMNOFGHIJ'),
+  blend('blend: more words', [
+    { w: 'CAN', gloss: 'can' }, { w: 'MAN', gloss: 'man' },
+    { w: 'FAN', gloss: 'fan' }, { w: 'HEN', gloss: 'hen' },
+    { w: 'LEG', gloss: 'leg' }, { w: 'DOG', gloss: 'dog' },
+    { w: 'LOG', gloss: 'log' }, { w: 'LID', gloss: 'lid' },
+  ]),
+  gauntlet('the bee family', 'BCDEG', { goal: G(12, 2) }),
+  phonics('sounds: P to T', 'PQRSTKLMNO'),
+  blend('blend: pots and pins', [
+    { w: 'RAT', gloss: 'rat' }, { w: 'POT', gloss: 'pot' },
+    { w: 'TOP', gloss: 'top' }, { w: 'MOP', gloss: 'mop' },
+    { w: 'SIT', gloss: 'sit' }, { w: 'PIN', gloss: 'pin' },
+    { w: 'TIN', gloss: 'tin' }, { w: 'RIB', gloss: 'rib' },
+  ]),
+  phonics('sounds: U to Z', 'UVWXYZPQRST'),
+  blend('blend: all the way to Z', [
+    { w: 'SUN', gloss: 'sun' }, { w: 'BUS', gloss: 'bus' },
+    { w: 'WEB', gloss: 'web' }, { w: 'FOX', gloss: 'fox' },
+    { w: 'ZIP', gloss: 'zip' }, { w: 'YAM', gloss: 'yam' },
+    { w: 'CUP', gloss: 'cup' }, { w: 'JET', gloss: 'jet' },
+  ]),
   gauntlet('mirror shapes', 'OQPRBDUV'),
-  chapter('U to Z', 'UVWXYZPQRST', { layout: 'torii' }),
-  phonics('sounds: P to Z', 'PQRSTUVWXYZ'),
   words('animals', [
     { w: 'FOX', gloss: 'fox' }, { w: 'OWL', gloss: 'owl' },
     { w: 'PIG', gloss: 'pig' }, { w: 'COW', gloss: 'cow' },
     { w: 'FROG', gloss: 'frog' }, { w: 'GOAT', gloss: 'goat' },
     { w: 'BEAR', gloss: 'bear' }, { w: 'DUCK', gloss: 'duck' },
-  ]),
-  reverse('recall: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
-  ear('by ear: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', { goal: G(15, 4) }),
-  words('longer words', [
-    { w: 'BIRD', gloss: 'bird' }, { w: 'FISH', gloss: 'fish' },
-    { w: 'HORSE', gloss: 'horse' }, { w: 'PLANT', gloss: 'plant' },
-    { w: 'MUSIC', gloss: 'music' }, { w: 'CLOUD', gloss: 'cloud' },
-    { w: 'SNAKE', gloss: 'you' },
   ]),
   words('fruit and veg', [
     { w: 'PLUM', gloss: 'plum' }, { w: 'PEAR', gloss: 'pear' },
@@ -423,6 +462,18 @@ const EN: Draft[] = [
     { w: 'GREY', gloss: 'grey' }, { w: 'BLACK', gloss: 'black' },
     { w: 'WHITE', gloss: 'white' }, { w: 'BROWN', gloss: 'brown' },
   ]),
+  // NAMES, once the sounds are secure. Children do need both eventually; the
+  // order is what matters, and this is the half that can wait.
+  chapter('letter names: A to M', 'ABCDEFGHIJKLM'),
+  chapter('letter names: N to Z', 'NOPQRSTUVWXYZ'),
+  reverse('recall: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+  ear('by ear: A to Z', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', { goal: G(15, 4) }),
+  words('longer words', [
+    { w: 'BIRD', gloss: 'bird' }, { w: 'FISH', gloss: 'fish' },
+    { w: 'HORSE', gloss: 'horse' }, { w: 'PLANT', gloss: 'plant' },
+    { w: 'MUSIC', gloss: 'music' }, { w: 'CLOUD', gloss: 'cloud' },
+    { w: 'SNAKE', gloss: 'you' },
+  ]),
   chapter('small letters', 'abcdefghij'),
   gauntlet('b d p q', 'bdpq', { goal: G(12, 2), paceScale: 1.1 }),
   chapter('small: k to t', 'klmnopqrstabcde', { layout: 'garden' }),
@@ -430,14 +481,11 @@ const EN: Draft[] = [
   gauntlet('small lookalikes', 'nuwmilaoce'),
   words('small words', [
     { w: 'sun', gloss: 'sun' }, { w: 'cake', gloss: 'cake' },
-    { w: 'gold', gloss: 'gold' }, { w: 'wind', gloss: 'wind' },
-    { w: 'lamp', gloss: 'lamp' }, { w: 'desk', gloss: 'desk' },
+    { w: 'gold', gloss: 'gold' }, { w: 'wimp', gloss: 'wimp' },
   ]),
   reverse('recall: a to z', 'abcdefghijklmnopqrstuvwxyz'),
   ear('by ear: a to z', 'abcdefghijklmnopqrstuvwxyz', { goal: G(15, 4) }),
-  gauntlet('the whole alphabet', 'BCDEGPTVZbdpqnuwmMN', {
-    goal: G(15, 2), paceScale: 1.3, layout: 'box',
-  }),
+  gauntlet('the whole alphabet', 'BCDEGPTVZbdpqnuwmMN', { goal: G(15, 2), paceScale: 1.15 }),
 ]
 
 const KO: Draft[] = [
