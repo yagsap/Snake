@@ -107,6 +107,14 @@ export class Clips {
     }
     const ctx = this.ensure()
     if (!ctx) return false
+    /**
+     * A suspended context plays nothing, and returning true here tells the
+     * caller the cue was handled — so the child would get SILENCE, the one
+     * thing this path must never produce. `ensure` asks for a resume, but the
+     * browser may refuse until a user gesture; until the context is actually
+     * running, report false and let TTS carry the cue.
+     */
+    if (ctx.state !== 'running') return false
     const src = ctx.createBufferSource()
     src.buffer = buf
     const gain = ctx.createGain()
